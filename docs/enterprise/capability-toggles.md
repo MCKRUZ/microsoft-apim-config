@@ -8,8 +8,8 @@ Every governance capability as a feature flag: its parameter, default per profil
 |---|---|:-:|:-:|:-:|:-:|---|---|---|
 | `networkIsolation` | VNet injection, Private Link, public-access OFF, NSGs | ○ | ● | ● | ● | Premium / Premium v2 (injection); Std v2 (integration+PE) | GA | `modules/network.bicep` (new) + `privateEndpoint` per backend |
 | `edgeWaf` | Front Door Premium + WAF at the edge | ○ | ○ | ● | ● | any (external resource) | GA | `modules/edge.bicep` (new) |
-| `workspaces` | Federated per-BU workspaces + scoped RBAC | ○ | ○ | ● | ● | Basic v2 / Std v2 / Premium / Premium v2 | GA | `modules/workspaces.bicep` (new) |
-| `entraAuth` | Entra JWT validation (model/tool/agent); per-agent identity | ○ | ● | ● | ● | any | GA | `validate-jwt` in policy fragments |
+| `workspaces` | Federated per-BU workspaces + scoped RBAC + `<base/>` Azure Policy | ○ | ○ | ● | ● | Basic v2 / Std v2 / Premium / Premium v2 (**not Developer**) | GA | `modules/federation.bicep` (workspaces + Workspace Contributor RBAC + base-inheritance policy assignment) |
+| `entraAuth` | Entra JWT validation at the global (All APIs) scope | ○ | ● | ● | ● | any | GA | `fragments/entra-jwt.xml` spliced into the global policy by `governance-global.bicep` |
 | `multiRegion` | Active-active regional gateways + failover | ○ | ○ | ● | ● | **Premium (classic)** only | GA | `additionalLocations` on `apim.bicep` |
 | `availabilityZones` | Zone-redundant units | ○ | ○ | ● | ● | Premium / Premium v2 | GA | `zones` on `apim.bicep` |
 | `useKeyVault` | Secrets via Key Vault references | ○ | ● | ● | ● | any | GA | `modules/keyvault.bicep` + KV-ref named values |

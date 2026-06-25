@@ -45,5 +45,16 @@ APIM diagnostic **data masking can only Hide/Mask headers and URL query paramete
 ## 12. SecOps auto-throttle needs an actuator you wire
 The budget alert (`modules/secops.bicep`) is fully deployed GA — detection, action group, the works. But Azure Monitor alerts **notify**; they don't mutate config. Closing the loop to *enforcement* (lower the TPM cap) is `scripts/throttle.*`, which you wire to the action group via an Automation runbook or Logic App (see [runbooks/secops-loop.md](runbooks/secops-loop.md)). Out of the box you get the alert + email and a one-command throttle; the fully-automatic path is a documented wiring step, not a deployed Logic App (kept out of Bicep deliberately — a hand-rolled workflow JSON is brittle for a reference repo). Also: **Defender for APIs** bills per subscription and onboarding each APIM API to it is a second, recommendation-driven portal step after the plan is enabled.
 
-## 13. Cost and SLA reality
+## 13. Workspaces (federation) need a v2 / Premium tier
+The `workspaces` flag (Phase 4 federation) is supported on **Basic v2 / Standard v2 /
+Premium / Premium v2 only** — verified against the tier feature comparison. The seed
+defaults to **Developer**, which does **not** support workspaces, so deploying
+`workspaces: true` on Developer **fails**. Any profile that turns it on (`test`/`prod`/
+`regulated`) must set a v2/Premium SKU (`APIM_SKU=StandardV2` or `PremiumV2`). The global
+policy floor and `entraAuth` work on every tier; only the workspaces half carries this
+requirement. Also: a workspace collaborator needs **both** a workspace-scoped and a
+service-scoped role, and MCP/A2A preview surfaces aren't supported inside workspaces yet.
+See [runbooks/federation.md](runbooks/federation.md).
+
+## 14. Cost and SLA reality
 Deploying costs real money. **Developer** APIM ≈ $50/mo with **no SLA** and ~30–45 min provisioning. **StandardV2** ≈ several hundred $/mo. Add Azure Managed Redis and Content Safety on top. The repo is deploy-ready; deciding to deploy is a deliberate, cost-incurring action.

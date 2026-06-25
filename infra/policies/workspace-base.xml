@@ -1,0 +1,27 @@
+<!--
+  ============================================================================
+  WORKSPACE BASE POLICY  -  a business-unit workspace floor (Phase 4)
+  ============================================================================
+  Applied at each per-BU workspace scope. It does exactly one thing on purpose:
+  inherit the parent (global) scope via <base /> in every section. That is the
+  whole federation contract in miniature — a workspace team can ADD narrower
+  policies here, but because <base /> is present they cannot bypass the central
+  controls (auth, logging, rate limits) the platform team set globally. The
+  built-in Azure Policy d5448c98-… audits/denies any workspace policy that drops
+  <base />, enforcing this from the outside.
+  ============================================================================
+-->
+<policies>
+    <inbound>
+        <base />
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

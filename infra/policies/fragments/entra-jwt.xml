@@ -1,0 +1,13 @@
+<!-- Entra ID (Azure AD) JWT validation. Injected into the global policy at the
+     ENTRA_JWT marker when the entraAuth flag is on. Requires a valid bearer token
+     for the configured audience, issued by the configured tenant. The tenant and
+     audience come from named values set by governance-global.bicep.
+     NOTE: this is a policy FRAGMENT, not a full <policies> document — it is loaded
+     and spliced into global-governance.xml, so it is intentionally excluded from
+     the structural policy linter (which scans only top-level policies/*.xml). -->
+<validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized: a valid Entra ID token is required to call this gateway.">
+    <openid-config url="https://login.microsoftonline.com/{{entra-tenant-id}}/v2.0/.well-known/openid-configuration" />
+    <audiences>
+        <audience>{{entra-audience}}</audience>
+    </audiences>
+</validate-jwt>

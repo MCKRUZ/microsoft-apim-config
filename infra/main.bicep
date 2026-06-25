@@ -73,6 +73,42 @@ param budgetTokensPerHour int = 5000000
 @description('Injection-spike alert threshold (count of 403 content-safety blocks per 15m window). Applies when secOpsLoop is on.')
 param injection403Threshold int = 20
 
+@description('Entra (Azure AD) tenant ID for JWT validation when entraAuth is on. Defaults to the deploying tenant.')
+param entraTenantId string = ''
+
+@description('Accepted token audience (aud) when entraAuth is on, e.g. api://apim-ai-gateway.')
+param entraAudience string = ''
+
+@description('Per-BU workspace definitions used when the workspaces flag is on. REQUIRES a v2/Premium tier (not Developer).')
+param workspaceDefs array = [
+  {
+    name: 'retail'
+    displayName: 'Retail'
+    description: 'Retail business-unit workspace (federated APIs/agents).'
+    adminGroupId: ''
+  }
+  {
+    name: 'networkops'
+    displayName: 'Network Ops'
+    description: 'Network Operations business-unit workspace.'
+    adminGroupId: ''
+  }
+  {
+    name: 'finance'
+    displayName: 'Finance'
+    description: 'Finance business-unit workspace.'
+    adminGroupId: ''
+  }
+]
+
+@description('Effect for the built-in <base/>-inheritance Azure Policy (Phase 4). Audit to start; Deny to hard-block.')
+@allowed([
+  'Audit'
+  'Deny'
+  'Disabled'
+])
+param basePolicyEffect string = 'Audit'
+
 @description('Tags applied to every resource.')
 param tags object = {
   workload: 'apim-agentic-governance'
@@ -87,6 +123,8 @@ var isolation = bool(flags.networkIsolation)
 var apimVnetType = isolation ? apimVnetMode : 'None'
 var secOps = bool(flags.secOpsLoop)
 var masking = bool(flags.dataMasking)
+var federationOn = bool(flags.workspaces)
+var entra = bool(flags.entraAuth)
 
 // Deterministic, globally-unique-ish suffix for resource names.
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
@@ -303,6 +341,31 @@ module products 'modules/products.bicep' = {
   params: {
     apimName: apim.outputs.apimName
     apiName: llmApi.outputs.apiName
+  }
+}
+
+// Phase 4 — the platform-team global policy floor (All APIs). Deployed in every
+// profile; entraAuth toggles the Entra JWT requirement spliced into it.
+module governanceGlobal 'modules/governance-global.bicep' = {
+  scope: rg
+  name: 'governance-global'
+  params: {
+    apimName: apim.outputs.apimName
+    entraAuth: entra
+    entraTenantId: entraTenantId
+    entraAudience: entraAudience
+  }
+}
+
+// Phase 4 — federation: per-BU workspaces + scoped RBAC + the <base/>-inheritance
+// Azure Policy. Workspaces REQUIRE a v2/Premium tier (not Developer) — see runbook.
+module federation 'modules/federation.bicep' = if (federationOn) {
+  scope: rg
+  name: 'federation'
+  params: {
+    apimName: apim.outputs.apimName
+    workspaceDefs: workspaceDefs
+    basePolicyEffect: basePolicyEffect
   }
 }
 

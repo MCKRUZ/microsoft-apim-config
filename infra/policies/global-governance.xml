@@ -1,0 +1,41 @@
+<!--
+  ============================================================================
+  GLOBAL (ALL-APIS) GOVERNANCE POLICY  -  the platform-team floor (Phase 4)
+  ============================================================================
+  This is the org-wide policy the PLATFORM team owns. It sits at the broadest
+  scope (All APIs / global); every API, product, workspace, and operation inherits
+  it through <base />. Putting the central guardrails here — and enforcing <base />
+  with the built-in Azure Policy (d5448c98-…) — is what stops a business-unit team
+  inside a workspace from silently dropping a shared control (target-architecture §5).
+
+  Contents:
+    - a correlation id stamped on every inbound request (end-to-end tracing)
+    - (when entraAuth is on) Entra ID JWT validation, injected at the ENTRA_JWT
+      marker below from policies/fragments/entra-jwt.xml. This is the real
+      *security* identity floor: a valid token is required to reach ANY API.
+
+  The ENTRA_JWT marker is replaced at deploy time by governance-global.bicep:
+  empty string when entraAuth is off (dev), the validate-jwt block when on
+  (test/prod/regulated). Assembling from a fragment means a disabled control
+  leaves NO dead policy behind — cleaner than commented-out XML.
+  ============================================================================
+-->
+<policies>
+    <inbound>
+        <base />
+        <!-- Stamp a correlation id so a request can be traced across every scope. -->
+        <set-header name="x-correlation-id" exists-action="skip">
+            <value>@(context.RequestId.ToString())</value>
+        </set-header>
+        <!-- ENTRA_JWT -->
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>
