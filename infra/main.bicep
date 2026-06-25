@@ -64,6 +64,15 @@ param flagOverrides object = {}
 ])
 param apimVnetMode string = 'External'
 
+@description('Email that receives SecOps alerts (budget breach, injection spike). Defaults to the APIM publisher email.')
+param secOpsEmail string = ''
+
+@description('Budget alert threshold (total tokens per 1h window) before the auto-throttle trigger fires. Applies when secOpsLoop is on.')
+param budgetTokensPerHour int = 5000000
+
+@description('Injection-spike alert threshold (count of 403 content-safety blocks per 15m window). Applies when secOpsLoop is on.')
+param injection403Threshold int = 20
+
 @description('Tags applied to every resource.')
 param tags object = {
   workload: 'apim-agentic-governance'
@@ -76,6 +85,8 @@ var profiles = loadJsonContent('config/profiles.json')
 var flags = union(profiles[profile], flagOverrides)
 var isolation = bool(flags.networkIsolation)
 var apimVnetType = isolation ? apimVnetMode : 'None'
+var secOps = bool(flags.secOpsLoop)
+var masking = bool(flags.dataMasking)
 
 // Deterministic, globally-unique-ish suffix for resource names.
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
@@ -251,11 +262,39 @@ module llmApi 'modules/llm-api.bicep' = {
     embeddingsDeploymentName: openai.outputs.embeddingsDeploymentName
     contentSafetyEndpoint: contentSafety.outputs.contentSafetyEndpoint
     apimLoggerId: apim.outputs.apimLoggerId
+    dataMasking: masking
   }
   // Named values must exist before the policy that references them is validated.
   dependsOn: [
     namedValues
   ]
+}
+
+// Phase 3 SecOps loop — Sentinel + diagnostic→LAW + budget/injection alerts → action group.
+module secopsModule 'modules/secops.bicep' = if (secOps) {
+  scope: rg
+  name: 'secops'
+  params: {
+    location: location
+    apimName: apim.outputs.apimName
+    workspaceId: monitoring.outputs.logAnalyticsId
+    governedApiName: llmApi.outputs.apiName
+    actionGroupEmail: empty(secOpsEmail) ? apimPublisherEmail : secOpsEmail
+    budgetTokensPerHour: budgetTokensPerHour
+    injection403Threshold: injection403Threshold
+    tags: tags
+  }
+}
+
+// Microsoft Defender for APIs — SUBSCRIPTION-scope plan (threat protection on APIM).
+// Standard tier bills per subscription on API traffic; gated on the flag. Onboarding
+// individual APIM APIs to Defender is a second, recommendation-driven step (portal).
+resource defenderForApis 'Microsoft.Security/pricings@2024-01-01' = if (secOps) {
+  name: 'Api'
+  properties: {
+    pricingTier: 'Standard'
+    subPlan: 'P1'
+  }
 }
 
 module products 'modules/products.bicep' = {

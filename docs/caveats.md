@@ -39,5 +39,11 @@ Anthropic Messages support for `llm-token-limit` / semantic cache, and the unifi
 ## 10. Preview surfaces will change
 MCP, A2A, and the unified model API are **preview**. Their management APIs are still moving and lack stable ARM/Bicep types, which is why they're provisioned via `scripts/provision-preview.*` rather than Bicep ([ADR-0003](adr/0003-preview-via-scripts.md)). Treat them as a direction, not a finished contract; expect to update the scripts as the surfaces stabilise.
 
-## 11. Cost and SLA reality
+## 11. Data masking covers headers and query params — not prompt/completion bodies
+APIM diagnostic **data masking can only Hide/Mask headers and URL query parameters** — verified against the diagnostic schema across every API version. It **cannot** redact PII inside the LLM prompt or completion **body**. So the `dataMasking` flag does the thing it actually can: it Hides the `api-key`/`subscription-key`/`Authorization` secret-leak vector from telemetry (`infra/modules/llm-api.bicep`). Protecting body content is a *different* lever — the per-API "log LLM messages" toggle (`promptLogging`): leave message-body logging **off** for sensitive BUs (the `regulated` profile does), or run an ingestion-time Log Analytics transform (DCR) to redact before the data lands. Do not assume `dataMasking: true` scrubs prompts — it does not, and nothing in APIM does.
+
+## 12. SecOps auto-throttle needs an actuator you wire
+The budget alert (`modules/secops.bicep`) is fully deployed GA — detection, action group, the works. But Azure Monitor alerts **notify**; they don't mutate config. Closing the loop to *enforcement* (lower the TPM cap) is `scripts/throttle.*`, which you wire to the action group via an Automation runbook or Logic App (see [runbooks/secops-loop.md](runbooks/secops-loop.md)). Out of the box you get the alert + email and a one-command throttle; the fully-automatic path is a documented wiring step, not a deployed Logic App (kept out of Bicep deliberately — a hand-rolled workflow JSON is brittle for a reference repo). Also: **Defender for APIs** bills per subscription and onboarding each APIM API to it is a second, recommendation-driven portal step after the plan is enabled.
+
+## 13. Cost and SLA reality
 Deploying costs real money. **Developer** APIM ≈ $50/mo with **no SLA** and ~30–45 min provisioning. **StandardV2** ≈ several hundred $/mo. Add Azure Managed Redis and Content Safety on top. The repo is deploy-ready; deciding to deploy is a deliberate, cost-incurring action.

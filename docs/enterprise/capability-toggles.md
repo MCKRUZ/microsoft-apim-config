@@ -14,7 +14,7 @@ Every governance capability as a feature flag: its parameter, default per profil
 | `availabilityZones` | Zone-redundant units | ○ | ○ | ● | ● | Premium / Premium v2 | GA | `zones` on `apim.bicep` |
 | `useKeyVault` | Secrets via Key Vault references | ○ | ● | ● | ● | any | GA | `modules/keyvault.bicep` + KV-ref named values |
 | `pipelineGuardrails` | CI/CD what-if gate, drift detection, policy tests | ○ | ● | ● | ● | n/a (CI) | GA | pipeline + scheduled drift job |
-| `secOpsLoop` | Sentinel, Defender for APIs, budget→auto-throttle, anomaly alerts | ○ | ○ | ● | ● | any | GA | `modules/secops.bicep` (new) + alert rules |
+| `secOpsLoop` | Sentinel, Defender for APIs, budget→auto-throttle, injection-spike alerts | ○ | ○ | ● | ● | any | GA | `modules/secops.bicep` (diag→LAW, Sentinel, action group, 2 log alerts) + `Microsoft.Security/pricings` (sub scope) + `scripts/throttle.*` actuator |
 | `selfHostedGateway` | Hybrid / on-prem / multi-cloud gateway | ○ | ○ | ○ | ○ | Developer / Premium | GA | self-hosted gateway resource |
 
 ## AI governance control toggles
@@ -30,7 +30,7 @@ Every governance capability as a feature flag: its parameter, default per profil
 | `contentSafetyResponse` | Screen completions on the way out | ○ | ● | ● | ● | all | GA | `enforce-on-completions="true"` |
 | `customBlocklists` | Org-specific blocked terms | ○ | ○ | ● | ● | all | GA | `<blocklists>` in policy |
 | `promptLogging` | Log prompts/completions for audit | ● | ● | ● | ○* | all | GA | API diagnostic |
-| `dataMasking` | PII redaction on logs | ○ | ● | ● | ● | all | GA | diagnostic data-masking |
+| `dataMasking` | Hide secret headers/query in logs (NOT body — see caveats §11) | ○ | ● | ● | ● | all | GA | diagnostic `frontend`/`backend` data-masking in `llm-api.bicep` |
 | `mcpTools` | Govern agent→tool (MCP) | ○ | ○ | ● | ● | Dev / v2 / Premium | **Preview** | `provision-preview` + `mcp-governance.xml` |
 | `a2aAgents` | Govern agent→agent (A2A) | ○ | ○ | ● | ● | Dev / v2 / Premium | **Preview** | `provision-preview` + `a2a-governance.xml` |
 | `multiProvider` | Unified doorway / Claude / Gemini | ○ | ○ | ○ | ○ | **v2 tiers** | **Preview** | unified model API (v2 or sidecar) |

@@ -39,6 +39,9 @@ param apimLoggerId string
 @description('Azure OpenAI REST api-version the governed API targets.')
 param openAiApiVersion string = '2024-10-21'
 
+@description('Mask secret-bearing headers/query params in the App Insights diagnostic (Phase 3 dataMasking flag). NOTE: APIM data masking covers headers + query params only — it cannot mask prompt/completion BODY content. Body PII is governed by whether LLM message logging is enabled (promptLogging). See docs/caveats.md.')
+param dataMasking bool = false
+
 resource apim 'Microsoft.ApiManagement/service@2024-05-01' existing = {
   name: apimName
 }
@@ -157,6 +160,40 @@ resource openAiApiDiagnostics 'Microsoft.ApiManagement/service/apis/diagnostics@
     verbosity: 'information'
     httpCorrelationProtocol: 'W3C'
     logClientIp: true
+    // Keep subscription keys / bearer tokens out of the telemetry. Masking lives on
+    // the per-direction pipeline settings (frontend = client→gateway, backend =
+    // gateway→model), NOT at the top level. Hide drops the value entirely. Headers +
+    // query params only — APIM cannot mask request/response BODY content.
+    frontend: dataMasking ? {
+      request: {
+        dataMasking: {
+          headers: [
+            {
+              mode: 'Hide'
+              value: 'api-key'
+            }
+          ]
+          queryParams: [
+            {
+              mode: 'Hide'
+              value: 'subscription-key'
+            }
+          ]
+        }
+      }
+    } : null
+    backend: dataMasking ? {
+      request: {
+        dataMasking: {
+          headers: [
+            {
+              mode: 'Hide'
+              value: 'Authorization'
+            }
+          ]
+        }
+      }
+    } : null
   }
 }
 
