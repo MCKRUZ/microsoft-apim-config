@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APIM Agentic Governance · The AI Gatekeeper Golden Copy</title>
+<meta name="description" content="A deployable reference implementation of Azure API Management as the governance layer for AI agents — the single chokepoint in front of every model, tool, and agent call.">
+<style>
+  :root {
+    --ink: #1a2332;
+    --ink-soft: #46556b;
+    --accent: #0f5c8c;
+    --accent-soft: #e8f1f7;
+    --rule: #d8dee8;
+    --bg: #f7f8fa;
+    --card: #ffffff;
+    --mono-bg: #0f1722;
+    --mono-ink: #d6e2f0;
+    --ga: #2e7d4f;
+    --preview: #b07a1e;
+    --danger: #b3372f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: var(--ink); background: var(--bg); line-height: 1.6; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---- top bar ---- */
+  .topbar { display: flex; align-items: center; gap: 2px; background: #0d2438; padding: 0 14px; font-size: 13.5px; flex-wrap: wrap; }
+  .topbar a { color: #cfe2f1; text-decoration: none; padding: 12px 14px; display: inline-block; }
+  .topbar a:hover { background: rgba(255,255,255,.09); color: #fff; }
+  .topbar a.home { font-weight: 700; color: #fff; }
+  .topbar a.active { color: #fff; box-shadow: inset 0 -3px 0 #5ea9d6; }
+  .topbar .sp { margin-left: auto; }
+  .topbar .ref { position: relative; }
+  .topbar .ref summary { list-style: none; cursor: pointer; padding: 12px 14px; color: #cfe2f1; }
+  .topbar .ref summary::-webkit-details-marker { display: none; }
+  .topbar .ref[open] summary { background: rgba(255,255,255,.09); color: #fff; }
+  .topbar .ref .menu { position: absolute; left: 0; top: 100%; z-index: 60; background: #0d2438; border: 1px solid #07151f; border-radius: 0 0 8px 8px; min-width: 230px; padding: 6px 0; box-shadow: 0 8px 20px rgba(0,0,0,.25); }
+  .topbar .ref .menu a { display: block; padding: 9px 16px; }
+
+  /* ---- hero ---- */
+  header.hero { background: linear-gradient(135deg, #11314e, #0f5c8c); color: #fff; }
+  header.hero .wrap { padding: 64px 24px 56px; }
+  header.hero .eyebrow { font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; color: #9fc3dd; margin: 0 0 14px; }
+  header.hero h1 { margin: 0 0 8px; font-size: 40px; line-height: 1.1; letter-spacing: -0.5px; }
+  header.hero h1 span { display: block; font-size: 21px; font-weight: 500; color: #cfe2f1; margin-top: 10px; letter-spacing: 0; }
+  header.hero p.lede { font-size: 18px; color: #e3eef6; max-width: 64ch; margin: 18px 0 0; }
+  header.hero .onerule { margin: 22px 0 28px; padding: 12px 18px; border-left: 3px solid #9fc3dd; background: rgba(255,255,255,0.08); border-radius: 0 8px 8px 0; max-width: 64ch; font-size: 15px; color: #eaf3fa; }
+  header.hero .onerule strong { color: #fff; }
+  .btns { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn { display: inline-block; text-decoration: none; font-weight: 600; font-size: 15px; padding: 12px 22px; border-radius: 8px; }
+  .btn.primary { background: #fff; color: var(--accent); }
+  .btn.primary:hover { background: #eaf3fa; }
+  .btn.ghost { background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.4); }
+  .btn.ghost:hover { background: rgba(255,255,255,0.2); }
+
+  /* ---- sections ---- */
+  section { padding: 52px 0; border-bottom: 1px solid var(--rule); }
+  section.tight { padding: 44px 0; }
+  h2.kicker { font-size: 13px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--accent); margin: 0 0 18px; }
+  .lead-30 { font-size: 19px; color: var(--ink); max-width: 68ch; margin: 0 0 6px; }
+  .lead-30 strong { color: var(--accent); }
+  .sub { color: var(--ink-soft); max-width: 72ch; }
+
+  /* ---- surfaces (3 cards) ---- */
+  .loop { display: flex; align-items: stretch; gap: 14px; flex-wrap: wrap; }
+  .loop .step { flex: 1 1 240px; background: var(--card); border: 1px solid var(--rule); border-top: 4px solid var(--accent); border-radius: 12px; padding: 20px 22px; }
+  .loop .step .n { font-size: 12px; font-weight: 700; letter-spacing: 1px; color: var(--ink-soft); text-transform: uppercase; }
+  .loop .step h3 { margin: 4px 0 6px; font-size: 21px; color: var(--accent); }
+  .loop .step .who { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; }
+  .loop .step p { margin: 0; font-size: 14px; color: var(--ink); }
+  .loop .step.tool { border-top-color: var(--preview); }
+  .loop .step.tool h3 { color: var(--preview); }
+  .loop .step.agent { border-top-color: var(--preview); }
+  .loop .step.agent h3 { color: var(--preview); }
+  .badge { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; padding: 2px 8px; border-radius: 20px; margin-left: 6px; vertical-align: middle; }
+  .badge.ga { background: #e4f3ea; color: var(--ga); }
+  .badge.preview { background: #f6edda; color: var(--preview); }
+
+  /* ---- controls strip ---- */
+  .ctrls { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .ctrl { background: var(--card); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 18px; }
+  .ctrl code { font-size: 12.5px; color: var(--accent); background: var(--accent-soft); padding: 1px 6px; border-radius: 5px; }
+  .ctrl h4 { margin: 8px 0 4px; font-size: 15px; }
+  .ctrl p { margin: 0; font-size: 13px; color: var(--ink-soft); }
+
+  /* ---- phases grid ---- */
+  .phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .phase { background: var(--card); border: 1px solid var(--rule); border-left: 4px solid var(--accent); border-radius: 10px; padding: 18px 20px; }
+  .phase .pn { font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-soft); }
+  .phase h3 { margin: 4px 0 8px; font-size: 18px; }
+  .phase p { margin: 0 0 10px; font-size: 13.5px; color: var(--ink-soft); }
+  .phase .flags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .phase .flags code { font-size: 11.5px; background: #eef2f7; color: var(--ink-soft); border: 1px solid var(--rule); border-radius: 20px; padding: 2px 9px; }
+
+  /* ---- callout ---- */
+  .callout { background: var(--accent-soft); border: 1px solid #bcd7e8; border-radius: 12px; padding: 22px 26px; }
+  .callout h3 { margin: 0 0 8px; font-size: 18px; color: var(--accent); }
+  .callout p { margin: 0; color: var(--ink); max-width: 74ch; }
+  pre.code { background: var(--mono-bg); color: var(--mono-ink); border-radius: 10px; padding: 16px 18px; overflow-x: auto; font-size: 13px; line-height: 1.55; margin: 16px 0 0; }
+  pre.code .c { color: #7fa6c4; }
+
+  /* ---- start-here cards ---- */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+  .rcard { background: var(--card); border: 1px solid var(--rule); border-radius: 12px; padding: 20px 22px; }
+  .rcard h3 { margin: 0 0 4px; font-size: 16px; color: var(--accent); }
+  .rcard .role { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ink-soft); margin-bottom: 10px; }
+  .rcard ol { margin: 0; padding-left: 18px; font-size: 13.5px; }
+  .rcard ol li { margin-bottom: 5px; }
+
+  /* ---- index grid ---- */
+  .idx { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 22px 30px; }
+  .idx .col h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--ink-soft); border-bottom: 1px solid var(--rule); padding-bottom: 6px; margin: 0 0 10px; }
+  .idx .col .row { padding: 3px 0; font-size: 14px; }
+  .idx .col .row a { text-decoration: none; }
+  .idx .col .row a:hover { color: var(--accent); }
+
+  footer.foot { padding: 28px 0 44px; color: var(--ink-soft); font-size: 13px; }
+  footer.foot a { color: var(--accent); }
+
+  @media (max-width: 760px) {
+    header.hero h1 { font-size: 30px; }
+    .loop .step { flex-basis: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home active" href="index.html">Home</a>
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/target-architecture.md">Architecture</a>
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/flag-status.md">Flags</a>
+  <details class="ref">
+    <summary>Phases &#9662;</summary>
+    <div class="menu">
+      <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/network-isolation.md">1 · Network isolation</a>
+      <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/ci-cd-pipeline.md">2 · CI/CD guardrails</a>
+      <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/secops-loop.md">3 · SecOps loop</a>
+      <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/federation.md">4 · Federation</a>
+      <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/reliability.md">5 · Reliability</a>
+      <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/multi-provider.md">6 · Multi-provider</a>
+    </div>
+  </details>
+  <details class="ref">
+    <summary>Reference &#9662;</summary>
+    <div class="menu">
+      <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/caveats.md">Caveats (16)</a>
+      <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/capability-toggles.md">Capability toggles</a>
+      <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/compliance-mapping.md">Compliance mapping</a>
+      <a href="https://github.com/MCKRUZ/microsoft-apim-config/tree/main/docs/adr">ADRs (0001–0009)</a>
+      <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/deploy.md">Deploy runbook</a>
+    </div>
+  </details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">MCKRUZ · AI Governance · Golden Copy v1.0</p>
+    <h1>APIM as the AI Gatekeeper
+      <span>The single chokepoint in front of every model call, tool invocation, and agent-to-agent hand-off.</span>
+    </h1>
+    <p class="lede">The trust boundary moved. Model-level safety governs the words a model
+      produces; it cannot govern what an agent <em>does</em>. Who may act, how much they may
+      spend, which systems they reach, and a record of all of it — those live at the one point
+      every action crosses: the API gateway.</p>
+    <div class="onerule"><strong>The invariant:</strong> every model, tool, and agent call
+      transits the gateway — and with network isolation on, it's enforced by the network, not by
+      an honor system.</div>
+    <div class="btns">
+      <a class="btn primary" href="https://github.com/MCKRUZ/microsoft-apim-config">View the repo →</a>
+      <a class="btn ghost" href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/target-architecture.md">Enterprise architecture →</a>
+    </div>
+  </div>
+</header>
+
+<section class="tight">
+  <div class="wrap">
+    <h2 class="kicker">In 30 seconds</h2>
+    <p class="lead-30">When agents can <strong>act</strong>, the controls that matter aren't in
+      the model — they're at the gateway: <strong>spend caps, content safety, identity, and an
+      audit record</strong>.</p>
+    <p class="sub">This is a deployable reference — Bicep IaC + deep docs, not slideware. One
+      control plane (Azure API Management) governs three traffic surfaces. Every capability is a
+      feature flag: <code>dev</code> reproduces a simple seed; <code>regulated</code> turns nearly
+      everything on. Built to survive a Dell/T-Mobile-class org. <em>Clone it, <code>azd up</code>,
+      and the gateway is governed.</em></p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2 class="kicker">One control plane · three traffic surfaces</h2>
+    <div class="loop">
+      <div class="step model">
+        <div class="n">Surface 1</div>
+        <h3>agent → model <span class="badge ga">GA</span></h3>
+        <div class="who">Azure OpenAI</div>
+        <p>Token spend caps (rate + monthly quota with pre-flight estimation), content safety
+          (Prompt Shields), semantic cache, and per-team cost attribution — one ordered policy.</p>
+      </div>
+      <div class="step tool">
+        <div class="n">Surface 2</div>
+        <h3>agent → tool <span class="badge preview">Preview</span></h3>
+        <div class="who">MCP servers</div>
+        <p>Rate-limit, identity, and an agent-id audit trace on tool traffic. Whole-server scope;
+          no response-body access (streaming-safe).</p>
+      </div>
+      <div class="step agent">
+        <div class="n">Surface 3</div>
+        <h3>agent → agent <span class="badge preview">Preview</span></h3>
+        <div class="who">A2A JSON-RPC</div>
+        <p>Rate-limit and identity on agent-to-agent hand-offs, with OpenTelemetry
+          <code>gen_ai.agent.id</code> attribution as the audit record.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2 class="kicker">The four GA controls (composed from flags)</h2>
+    <div class="ctrls">
+      <div class="ctrl">
+        <code>llm-token-limit</code>
+        <h4>Spend cap</h4>
+        <p>Per-minute TPM + monthly quota, keyed per team. Pre-flight estimation rejects
+          over-budget calls before they bill the model.</p>
+      </div>
+      <div class="ctrl">
+        <code>llm-emit-token-metric</code>
+        <h4>Cost attribution</h4>
+        <p>Per-team / per-agent token metrics into Application Insights — the FinOps view.</p>
+      </div>
+      <div class="ctrl">
+        <code>llm-content-safety</code>
+        <h4>Content safety</h4>
+        <p>Prompt Shields block jailbreaks and indirect injection before the model — request and,
+          optionally, response.</p>
+      </div>
+      <div class="ctrl">
+        <code>llm-semantic-cache</code>
+        <h4>Semantic cache</h4>
+        <p>Returns cached completions for semantically similar prompts (Azure Managed Redis +
+          RediSearch) — tokens not re-billed.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2 class="kicker">The enterprise rollout · six toggleable phases</h2>
+    <div class="phases">
+      <div class="phase">
+        <div class="pn">Phase 1 · GA</div>
+        <h3>Network isolation</h3>
+        <p>VNet injection, Private Link, public-access-off. Backends lose their public path — the
+          chokepoint becomes enforced, not honor-system.</p>
+        <div class="flags"><code>networkIsolation</code></div>
+      </div>
+      <div class="phase">
+        <div class="pn">Phase 2 · GA</div>
+        <h3>CI/CD guardrails</h3>
+        <p>Reviewed pipeline (what-if → approve → staged apply), structural policy lint, and
+          nightly drift detection. No portal edits in prod.</p>
+        <div class="flags"><code>pipelineGuardrails</code></div>
+      </div>
+      <div class="phase">
+        <div class="pn">Phase 3 · GA</div>
+        <h3>SecOps loop</h3>
+        <p>Sentinel + Defender for APIs, budget-breach → auto-throttle, injection-spike alerts,
+          and log secret-masking. Telemetry becomes enforcement.</p>
+        <div class="flags"><code>secOpsLoop</code><code>dataMasking</code></div>
+      </div>
+      <div class="phase">
+        <div class="pn">Phase 4 · GA</div>
+        <h3>Federation</h3>
+        <p>Per-BU workspaces with scoped Entra RBAC, a global policy floor, and Azure Policy
+          enforcing <code>&lt;base/&gt;</code> inheritance. Central control, BU autonomy.</p>
+        <div class="flags"><code>workspaces</code><code>entraAuth</code></div>
+      </div>
+      <div class="phase">
+        <div class="pn">Phase 5 · GA</div>
+        <h3>Reliability</h3>
+        <p>Availability zones, multi-region active-active, and a circuit-breaker backend pool.
+          Survive a zone, a region, a throttling model.</p>
+        <div class="flags"><code>multiRegion</code><code>availabilityZones</code><code>modelFailover</code></div>
+      </div>
+      <div class="phase">
+        <div class="pn">Phase 6 · GA + Preview</div>
+        <h3>Multi-provider</h3>
+        <p>Key Vault as the secret home, plus the unified doorway / Claude (preview, v2-only)
+          governed by the same policies. Provider independence.</p>
+        <div class="flags"><code>useKeyVault</code><code>multiProvider</code></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2 class="kicker">Everything is a toggle</h2>
+    <div class="callout">
+      <h3>One profile, every capability a flag</h3>
+      <p>A <code>profile</code> selects a flag set; any flag is overridable per deploy. Flags gate
+        conditional module deployment <em>and</em> compose the policy itself — so a disabled control
+        leaves no dead policy behind. The per-flag wiring audit (Bicep-gated · policy-composed ·
+        informational · declared-future) is honest about every one.</p>
+      <pre class="code"><span class="c"># pick a posture</span>
+azd env set GOV_PROFILE prod        <span class="c"># dev | test | prod | regulated</span>
+azd up
+
+<span class="c"># or override one flag on any profile</span>
+az deployment sub create -l eastus2 -f infra/main.bicep \
+  -p infra/main.parameters.json -p profile=dev \
+  -p flagOverrides='{"networkIsolation":true}'</pre>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2 class="kicker">Start here</h2>
+    <div class="cards">
+      <div class="rcard">
+        <h3>Architect</h3>
+        <div class="role">Designing the platform</div>
+        <ol>
+          <li><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/target-architecture.md">Enterprise target architecture</a></li>
+          <li><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/target-architecture.md#3-tier-decision-the-load-bearing-choice">The tier decision (§3)</a></li>
+          <li><a href="https://github.com/MCKRUZ/microsoft-apim-config/tree/main/docs/adr">The ADRs (0001–0009)</a></li>
+        </ol>
+      </div>
+      <div class="rcard">
+        <h3>Platform engineer</h3>
+        <div class="role">Deploying it</div>
+        <ol>
+          <li><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/deploy.md">Deploy runbook</a></li>
+          <li><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/flag-status.md">Flag status — what each toggle does</a></li>
+          <li><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/ci-cd-pipeline.md">CI/CD pipeline setup (OIDC)</a></li>
+        </ol>
+      </div>
+      <div class="rcard">
+        <h3>Security / risk</h3>
+        <div class="role">Governing &amp; auditing</div>
+        <ol>
+          <li><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/compliance-mapping.md">Compliance mapping</a></li>
+          <li><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/secops-loop.md">SecOps loop</a></li>
+          <li><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/caveats.md">The 16 caveats</a></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2 class="kicker">The full index</h2>
+    <div class="idx">
+      <div class="col">
+        <h3>Architecture</h3>
+        <div class="row"><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/architecture.md">Two-plane model</a></div>
+        <div class="row"><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/target-architecture.md">Enterprise target</a></div>
+        <div class="row"><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/capability-toggles.md">Capability toggles</a></div>
+        <div class="row"><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/flag-status.md">Flag status audit</a></div>
+        <div class="row"><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/maturity-matrix.md">Maturity matrix</a></div>
+      </div>
+      <div class="col">
+        <h3>Controls</h3>
+        <div class="row"><a href="https://github.com/MCKRUZ/microsoft-apim-config/tree/main/docs/controls">All control pages</a></div>
+        <div class="row"><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/infra/policies/llm-governance.xml">llm-governance.xml</a></div>
+        <div class="row"><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/infra/policies/global-governance.xml">global-governance.xml</a></div>
+        <div class="row"><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/caveats.md">Caveats</a></div>
+      </div>
+      <div class="col">
+        <h3>Runbooks</h3>
+        <div class="row"><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/network-isolation.md">Network isolation</a></div>
+        <div class="row"><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/secops-loop.md">SecOps loop</a></div>
+        <div class="row"><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/federation.md">Federation</a></div>
+        <div class="row"><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/reliability.md">Reliability</a></div>
+        <div class="row"><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/multi-provider.md">Multi-provider</a></div>
+      </div>
+      <div class="col">
+        <h3>Decisions</h3>
+        <div class="row"><a href="https://github.com/MCKRUZ/microsoft-apim-config/tree/main/docs/adr">ADRs 0001–0009</a></div>
+        <div class="row"><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/infra/config/profiles.json">profiles.json</a></div>
+        <div class="row"><a href="https://github.com/MCKRUZ/microsoft-apim-config/tree/main/.github/workflows">CI workflows</a></div>
+        <div class="row"><a href="https://matthewkruczek.ai/blog/apim-agentic-governance">The thesis (blog)</a></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <div class="wrap">
+    MCKRUZ · APIM Agentic Governance Golden Copy · built on Azure API Management.
+    Based on <a href="https://matthewkruczek.ai/blog/apim-agentic-governance">The Trust Boundary Moved</a>.
+    Verified against Microsoft Learn · GA is Bicep, preview is scripts · every caveat documented.
+    <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+  </div>
+</footer>
+
+</body>
+</html>
