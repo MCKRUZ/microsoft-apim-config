@@ -1,6 +1,6 @@
 # Enterprise Target Architecture
 
-The production target for this golden copy at enterprise scale (Dell / T-Mobile class): tens of thousands of agents, dozens of business units, multi-region, audited, and **every capability toggleable** per environment and per business unit.
+The production target for this golden copy at global-enterprise scale: tens of thousands of agents, dozens of business units, multi-region, audited, and **every capability toggleable** per environment and per business unit.
 
 This document is the target. The current repo is the GA core seed; [§9 Gap & rollout](#9-gap--rollout) maps seed → target.
 
@@ -72,7 +72,7 @@ Verified against Microsoft Learn (June 2026):
 
 **The unavoidable trade today:** multi-region active-active (Premium classic) **vs** in-gateway multi-provider/Claude (v2). You cannot have both in one instance right now.
 
-**Recommendation:** for a Dell/T-Mobile-class deployment whose first requirement is resilience and global latency, anchor on **Premium (classic), multi-region, zone-redundant, VNet-injected**, and govern OpenAI in-gateway. Add Claude via a **separate v2 instance or a self-hosted/sidecar** behind the same edge until v2 gains multi-region — modelled as the `multiProvider` toggle routing to a v2 backend. Make the tier a parameter so the decision is reversible.
+**Recommendation:** for a global-enterprise deployment whose first requirement is resilience and global latency, anchor on **Premium (classic), multi-region, zone-redundant, VNet-injected**, and govern OpenAI in-gateway. Add Claude via a **separate v2 instance or a self-hosted/sidecar** behind the same edge until v2 gains multi-region — modelled as the `multiProvider` toggle routing to a v2 backend. Make the tier a parameter so the decision is reversible.
 
 ---
 

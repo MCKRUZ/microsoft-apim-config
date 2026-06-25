@@ -15,7 +15,7 @@ three flags: `availabilityZones` (zone redundancy), `multiRegion` (regional fail
 > **Multi-region (Premium classic) and in-gateway multi-provider/Claude (v2) are mutually
 > exclusive in one instance today.** This is a current Azure limit, not a design choice.
 
-- **Resilience-first** (Dell/T-Mobile class, global latency): anchor on **Premium classic**,
+- **Resilience-first** (global-enterprise scale, global latency): anchor on **Premium classic**,
   `multiRegion` + `availabilityZones`, govern OpenAI in-gateway. Add Claude later via a
   separate v2 instance / sidecar (`multiProvider`, Phase 6).
 - **Provider-independence-first**: anchor on a **v2** tier (Premium v2), get AZ + the unified

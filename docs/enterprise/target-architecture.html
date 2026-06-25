@@ -35,7 +35,7 @@
   <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/target-architecture.md">edit this page on GitHub ↗</a></p>
 </div></header>
 <main class="content"><div class="wrap">
-<p>The production target for this golden copy at enterprise scale (Dell / T-Mobile class): tens of thousands of agents, dozens of business units, multi-region, audited, and <strong>every capability toggleable</strong> per environment and per business unit.</p>
+<p>The production target for this golden copy at global-enterprise scale: tens of thousands of agents, dozens of business units, multi-region, audited, and <strong>every capability toggleable</strong> per environment and per business unit.</p>
 <p>This document is the target. The current repo is the GA core seed; <a href="#9-gap--rollout">§9 Gap &amp; rollout</a> maps seed → target.</p>
 <hr />
 <h2 id="1-principles">1. Principles</h2>
@@ -144,7 +144,7 @@
 </tbody>
 </table>
 <p><strong>The unavoidable trade today:</strong> multi-region active-active (Premium classic) <strong>vs</strong> in-gateway multi-provider/Claude (v2). You cannot have both in one instance right now.</p>
-<p><strong>Recommendation:</strong> for a Dell/T-Mobile-class deployment whose first requirement is resilience and global latency, anchor on <strong>Premium (classic), multi-region, zone-redundant, VNet-injected</strong>, and govern OpenAI in-gateway. Add Claude via a <strong>separate v2 instance or a self-hosted/sidecar</strong> behind the same edge until v2 gains multi-region — modelled as the <code>multiProvider</code> toggle routing to a v2 backend. Make the tier a parameter so the decision is reversible.</p>
+<p><strong>Recommendation:</strong> for a global-enterprise deployment whose first requirement is resilience and global latency, anchor on <strong>Premium (classic), multi-region, zone-redundant, VNet-injected</strong>, and govern OpenAI in-gateway. Add Claude via a <strong>separate v2 instance or a self-hosted/sidecar</strong> behind the same edge until v2 gains multi-region — modelled as the <code>multiProvider</code> toggle routing to a v2 backend. Make the tier a parameter so the decision is reversible.</p>
 <hr />
 <h2 id="4-network-isolation-enablenetworkisolation">4. Network isolation (<code>enableNetworkIsolation</code>)</h2>
 <p>The toggle that makes Principle 1 <em>true</em> rather than aspirational.</p>

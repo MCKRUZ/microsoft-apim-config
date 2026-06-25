@@ -74,7 +74,7 @@ three flags: <code>availabilityZones</code> (zone redundancy), <code>multiRegion
 exclusive in one instance today.</strong> This is a current Azure limit, not a design choice.</p>
 </blockquote>
 <ul>
-<li><strong>Resilience-first</strong> (Dell/T-Mobile class, global latency): anchor on <strong>Premium classic</strong>,
+<li><strong>Resilience-first</strong> (global-enterprise scale, global latency): anchor on <strong>Premium classic</strong>,
 <code>multiRegion</code> + <code>availabilityZones</code>, govern OpenAI in-gateway. Add Claude later via a
 separate v2 instance / sidecar (<code>multiProvider</code>, Phase 6).</li>
 <li><strong>Provider-independence-first</strong>: anchor on a <strong>v2</strong> tier (Premium v2), get AZ + the unified

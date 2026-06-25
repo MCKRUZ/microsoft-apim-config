@@ -34,7 +34,7 @@ See [docs/architecture.md](docs/architecture.md) for the two-plane model and [do
 
 ## Enterprise capabilities — everything is a toggle
 
-Beyond the GA core, the repo is a full **enterprise control plane** built to survive a Dell/T-Mobile-class org: every governance capability is a feature flag with a per-environment default. A `profile` (`dev` / `test` / `prod` / `regulated`) selects a flag set; any flag is overridable per deploy. `dev` reproduces the simple seed; `regulated` turns nearly everything on. A disabled capability leaves **nothing** behind — flags gate conditional module deployment and compose the policy itself.
+Beyond the GA core, the repo is a full **enterprise control plane** built to survive a global enterprise: every governance capability is a feature flag with a per-environment default. A `profile` (`dev` / `test` / `prod` / `regulated`) selects a flag set; any flag is overridable per deploy. `dev` reproduces the simple seed; `regulated` turns nearly everything on. A disabled capability leaves **nothing** behind — flags gate conditional module deployment and compose the policy itself.
 
 Six phases, each independently shippable, all on `main`:
 
