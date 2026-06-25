@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A2A Agents (agent → agent surface) · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">controls</a></p>
+  <h1>A2A Agents (agent → agent surface)</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/controls/a2a-agents.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<blockquote>
+<p><strong>PREVIEW.</strong> Management APIs are unstable and lack stable Bicep types. Provisioned via
+portal/CLI guidance in <code>scripts/provision-preview.*</code>, not declarative IaC.</p>
+</blockquote>
+<p>See <a href="../architecture.html">architecture</a> and <a href="../caveats.html">caveats</a>.</p>
+<h2 id="what-it-governs">What it governs</h2>
+<p>The <strong>agent → agent (A2A)</strong> traffic surface. APIM imports an A2A (Agent2Agent) JSON-RPC
+agent and mediates the JSON-RPC traffic between caller and callee agent. The gateway
+invariant holds: agent-to-agent calls are governed, traced, and identity-bound like every
+other surface.</p>
+<h2 id="endpoint-shape">Endpoint / shape</h2>
+<p>JSON-RPC. On import APIM <strong>re-projects the agent card</strong>:</p>
+<ul>
+<li>rewrites the hostname to the APIM host,</li>
+<li>sets the JSON-RPC transport,</li>
+<li>adds a subscription-key requirement.</li>
+</ul>
+<p>It emits OpenTelemetry <code>gen_ai.agent.id</code> and <code>gen_ai.agent.name</code> spans for tracing.</p>
+<h2 id="how-to-provision">How to provision</h2>
+<ol>
+<li>Run <code>scripts/provision-preview.{sh,ps1}</code> — handles the A2A import (no stable Bicep type
+   yet).</li>
+<li>Or in the portal: import the A2A agent by its JSON-RPC endpoint; APIM generates the
+   re-projected agent card.</li>
+<li>Attach the governance policy below.</li>
+</ol>
+<h2 id="governance-policy">Governance policy</h2>
+<p><code>infra/policies/a2a-governance.xml</code>.</p>
+<h2 id="limitations-caveats">Limitations / caveats</h2>
+<ul>
+<li><strong>JSON-RPC only.</strong></li>
+<li><strong>No outgoing response-body deserialization</strong> — policies cannot inspect/transform the
+  JSON-RPC response payload.</li>
+<li>Preview: import behavior and card projection may change.</li>
+</ul>
+<h2 id="test">Test</h2>
+<p>Call the re-projected agent card URL on the APIM host with a team subscription key;
+confirm the hostname is rewritten to APIM and that <code>gen_ai.agent.id</code> /
+<code>gen_ai.agent.name</code> appear in the OTel trace.</p>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

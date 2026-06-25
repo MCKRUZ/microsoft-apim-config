@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Runbook — CI/CD guardrails (Phase 2) · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">runbooks</a></p>
+  <h1>Runbook — CI/CD guardrails (Phase 2)</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/ci-cd-pipeline.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p>Makes "policy-as-code" mean something: no change reaches a deployed gateway except
+through a reviewed pipeline, and any out-of-band portal edit is caught and surfaced.
+This is the <code>pipelineGuardrails</code> capability.</p>
+<h2 id="what-it-adds">What it adds</h2>
+<table>
+<thead>
+<tr>
+<th>Workflow</th>
+<th>Trigger</th>
+<th>Does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/.github/workflows/validate.yml"><code>validate.yml</code></a></td>
+<td>PR touching <code>infra/</code>, <code>scripts/</code>, workflows</td>
+<td><code>bicep build</code> (warnings = errors) · policy lint · secret scan · what-if preview against dev</td>
+</tr>
+<tr>
+<td><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/.github/workflows/deploy.yml"><code>deploy.yml</code></a> → <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/.github/workflows/_deploy-stage.yml"><code>_deploy-stage.yml</code></a></td>
+<td>push to <code>main</code> / manual</td>
+<td>staged <strong>dev → test → prod</strong>, each: what-if → deploy → smoke-test; <code>test</code>/<code>prod</code> gated by required reviewers</td>
+</tr>
+<tr>
+<td><a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/.github/workflows/drift.yml"><code>drift.yml</code></a></td>
+<td>nightly cron / manual</td>
+<td>what-if the repo against live <code>test</code> + <code>prod</code>; any mutating change → fail + file a <code>drift</code> issue</td>
+</tr>
+</tbody>
+</table>
+<p>Two scripts back these and run locally too:
+- <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/scripts/lint-policies.sh"><code>scripts/lint-policies.sh</code></a> / <code>.ps1</code> — structural policy lint.
+- <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/scripts/drift-detect.sh"><code>scripts/drift-detect.sh</code></a> / <code>.ps1</code> — what-if drift check (exit 2 = drift).</p>
+<h2 id="why-these-specific-gates">Why these specific gates</h2>
+<ul>
+<li><strong>Warnings-as-errors on <code>bicep build</code></strong> — the seed compiles clean; this keeps it that way so lint debt can't accrete unnoticed.</li>
+<li><strong>Structural policy lint, not XML validation</strong> — APIM policy expressions embed C# with nested double quotes (<code>@(context.Subscription?.Id ?? "anonymous")</code>), which is <em>not</em> well-formed XML. A DOM parser would raise false failures, so the linter checks structure (sections present, <code>&lt;base /&gt;</code> inheritance, balanced <code>{{tokens}}</code>, no hardcoded secrets) instead. The <code>&lt;base /&gt;</code> check mirrors the Azure Policy <em>"API Management policies should inherit parent scope using <code>&lt;base/&gt;</code>"</em> — a workspace/BU policy can never silently strip a central control.</li>
+<li><strong>what-if before every apply</strong> — the resource delta is in the run log before anything mutates; on a PR it's informational, on a deploy it's the plan.</li>
+<li><strong>smoke-test gates promotion</strong> — <code>scripts/smoke-test.sh</code> fires a jailbreak, an over-cap call, and a cache-hit pair at the just-deployed stage. A control regression stops the rollout before it reaches prod.</li>
+<li><strong>Drift detection</strong> — telemetry can't tell you someone hand-edited a policy in the portal; a scheduled what-if can. Drift fails the job and opens an issue so it's owned, not silently re-applied.</li>
+</ul>
+<h2 id="one-time-setup">One-time setup</h2>
+<h3 id="1-federated-identity-oidc-no-stored-secrets">1. Federated identity (OIDC, no stored secrets)</h3>
+<p>Per environment (<code>dev</code>, <code>test</code>, <code>prod</code>) create an Entra app (or user-assigned MI) with a
+<strong>federated credential</strong> trusting this repo's environment, and grant it <code>Contributor</code> +
+<code>Role Based Access Control Administrator</code> (the template assigns roles) on the target
+subscription:</p>
+<pre><code class="language-bash">az ad app create --display-name &quot;apim-gov-deploy-prod&quot;
+# Federated credential — subject must match the environment:
+az ad app federated-credential create --id &lt;appId&gt; --parameters '{
+  &quot;name&quot;: &quot;gh-prod&quot;,
+  &quot;issuer&quot;: &quot;https://token.actions.githubusercontent.com&quot;,
+  &quot;subject&quot;: &quot;repo:&lt;org&gt;/&lt;repo&gt;:environment:prod&quot;,
+  &quot;audiences&quot;: [&quot;api://AzureADTokenExchange&quot;]
+}'
+az role assignment create --assignee &lt;appId&gt; --role Contributor --scope /subscriptions/&lt;subId&gt;
+az role assignment create --assignee &lt;appId&gt; --role &quot;Role Based Access Control Administrator&quot; --scope /subscriptions/&lt;subId&gt;
+</code></pre>
+<p>No client secret is created or stored — auth is the short-lived OIDC token. (rules/security.md)</p>
+<h3 id="2-github-environments">2. GitHub Environments</h3>
+<p>Create environments <code>dev</code>, <code>test</code>, <code>prod</code>. On <code>test</code> and <code>prod</code> add a <strong>required reviewers</strong>
+protection rule — that is the approval gate. Set these <strong>environment variables</strong> on each:</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AZURE_CLIENT_ID</code></td>
+<td>the app/MI client id for that environment</td>
+</tr>
+<tr>
+<td><code>AZURE_TENANT_ID</code></td>
+<td>tenant id</td>
+</tr>
+<tr>
+<td><code>AZURE_SUBSCRIPTION_ID</code></td>
+<td>target subscription</td>
+</tr>
+<tr>
+<td><code>AZURE_LOCATION</code></td>
+<td>region (e.g. <code>eastus2</code>)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="3-branch-protection">3. Branch protection</h3>
+<p>Require the <code>validate</code> checks to pass before merge to <code>main</code>. Now: PR → validate → review →
+merge → staged deploy with approvals → nightly drift watch.</p>
+<h2 id="the-pipelineguardrails-flag-is-informational">The <code>pipelineGuardrails</code> flag is informational</h2>
+<p>Unlike <code>networkIsolation</code>, this flag does <strong>not</strong> gate a Bicep module — CI/CD lives outside
+the deployment. The flag in <code>profiles.json</code> is a <strong>declaration</strong> that an environment is
+expected to be under pipeline governance (on for <code>test</code>/<code>prod</code>/<code>regulated</code>, off for <code>dev</code>).
+Use it for audit/compliance assertions ("is this env change-controlled?"), not to switch
+infrastructure. Flipping it does not deploy or remove anything. This is called out so no one
+expects <code>pipelineGuardrails: true</code> to <em>create</em> the pipeline — the pipeline is the workflow
+files in <code>.github/</code>, present once and applied by branch/environment protection.</p>
+<h2 id="running-the-checks-locally">Running the checks locally</h2>
+<pre><code class="language-bash">sh scripts/lint-policies.sh                 # before every push
+GOV_PROFILE=prod sh scripts/drift-detect.sh # ad-hoc drift check against live prod
+</code></pre>
+<pre><code class="language-pwsh">pwsh scripts/lint-policies.ps1
+$env:GOV_PROFILE='prod'; pwsh scripts/drift-detect.ps1
+</code></pre>
+<h2 id="handling-a-drift-alert">Handling a drift alert</h2>
+<ol>
+<li>Open the <code>drift</code> issue / failed run; the log lists the changed resource ids.</li>
+<li>Decide: was the portal edit legitimate?
+   - <strong>No</strong> → redeploy the repo to overwrite it: re-run <code>deploy.yml</code> for that environment.
+   - <strong>Yes</strong> → reproduce it in <code>infra/</code> and open a PR so the repo becomes the source of truth again.</li>
+<li>Re-run <code>drift.yml</code> to confirm green and auto-close the loop.</li>
+</ol>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

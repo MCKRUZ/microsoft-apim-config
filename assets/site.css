@@ -1,0 +1,99 @@
+/* ============================================================================
+   site.css — shared styling for the APIM Agentic Governance golden-copy site.
+   Used by index.html (landing) and every generated doc subpage. Regenerate the
+   doc pages with scripts/build-site.py.
+   ============================================================================ */
+:root {
+  --ink: #1a2332;
+  --ink-soft: #46556b;
+  --accent: #0f5c8c;
+  --accent-soft: #e8f1f7;
+  --rule: #d8dee8;
+  --bg: #f7f8fa;
+  --card: #ffffff;
+  --mono-bg: #0f1722;
+  --mono-ink: #d6e2f0;
+  --ga: #2e7d4f;
+  --preview: #b07a1e;
+  --danger: #b3372f;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: var(--ink); background: var(--bg); line-height: 1.6; }
+a { color: var(--accent); }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+/* ---- top bar (shared) ---- */
+.topbar { display: flex; align-items: center; gap: 2px; background: #0d2438; padding: 0 14px; font-size: 13.5px; flex-wrap: wrap; }
+.topbar a { color: #cfe2f1; text-decoration: none; padding: 12px 14px; display: inline-block; }
+.topbar a:hover { background: rgba(255,255,255,.09); color: #fff; }
+.topbar a.home { font-weight: 700; color: #fff; }
+.topbar a.active { color: #fff; box-shadow: inset 0 -3px 0 #5ea9d6; }
+.topbar .sp { margin-left: auto; }
+.topbar .ref { position: relative; }
+.topbar .ref summary { list-style: none; cursor: pointer; padding: 12px 14px; color: #cfe2f1; }
+.topbar .ref summary::-webkit-details-marker { display: none; }
+.topbar .ref[open] summary { background: rgba(255,255,255,.09); color: #fff; }
+.topbar .ref .menu { position: absolute; left: 0; top: 100%; z-index: 60; background: #0d2438; border: 1px solid #07151f; border-radius: 0 0 8px 8px; min-width: 230px; padding: 6px 0; box-shadow: 0 8px 20px rgba(0,0,0,.25); }
+.topbar .ref .menu a { display: block; padding: 9px 16px; }
+
+footer.foot { padding: 28px 0 44px; color: var(--ink-soft); font-size: 13px; border-top: 1px solid var(--rule); margin-top: 40px; }
+footer.foot a { color: var(--accent); }
+
+/* ============================================================================
+   Doc subpage (rendered markdown) layout
+   ============================================================================ */
+.dochead { background: linear-gradient(135deg, #11314e, #0f5c8c); color: #fff; }
+.dochead .wrap { padding: 30px 24px 26px; }
+.dochead .crumb { font-size: 12.5px; letter-spacing: .3px; color: #9fc3dd; margin: 0 0 6px; }
+.dochead .crumb a { color: #cfe2f1; text-decoration: none; }
+.dochead .crumb a:hover { color: #fff; text-decoration: underline; }
+.dochead h1 { margin: 0; font-size: 28px; line-height: 1.2; letter-spacing: -0.3px; }
+.dochead .edit { margin: 10px 0 0; font-size: 13px; }
+.dochead .edit a { color: #cfe2f1; }
+
+main.content { padding: 32px 0 20px; }
+.content .wrap { max-width: 900px; }
+
+/* prose */
+.content h1, .content h2, .content h3, .content h4 { line-height: 1.25; scroll-margin-top: 16px; }
+.content h1 { font-size: 26px; margin: 8px 0 14px; }
+.content h2 { font-size: 21px; margin: 34px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.content h3 { font-size: 17px; margin: 24px 0 8px; color: var(--ink); }
+.content h4 { font-size: 15px; margin: 18px 0 6px; color: var(--ink-soft); }
+.content p { margin: 12px 0; }
+.content ul, .content ol { margin: 12px 0; padding-left: 26px; }
+.content li { margin: 4px 0; }
+.content li > ul, .content li > ol { margin: 4px 0; }
+.content hr { border: 0; border-top: 1px solid var(--rule); margin: 28px 0; }
+.content strong { color: var(--ink); }
+.content a { text-decoration: none; }
+.content a:hover { text-decoration: underline; }
+
+/* inline + block code */
+.content code { font-family: "Cascadia Code", "SF Mono", Consolas, monospace; font-size: 13px; background: var(--accent-soft); color: #0c4a73; padding: 1px 6px; border-radius: 5px; }
+.content pre { background: var(--mono-bg); border-radius: 10px; padding: 16px 18px; overflow-x: auto; margin: 16px 0; }
+.content pre code { background: none; color: var(--mono-ink); padding: 0; font-size: 12.8px; line-height: 1.55; }
+
+/* blockquote — used for the honest call-outs */
+.content blockquote { margin: 16px 0; padding: 10px 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; color: var(--ink); }
+.content blockquote p { margin: 6px 0; }
+
+/* tables — heavy use in capability-toggles / caveats / flag-status */
+.content table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 13.5px; display: block; overflow-x: auto; }
+.content th, .content td { border: 1px solid var(--rule); padding: 7px 11px; text-align: left; vertical-align: top; }
+.content thead th { background: #eef3f8; color: var(--ink); font-weight: 600; }
+.content tbody tr:nth-child(even) { background: #fafbfc; }
+
+/* mermaid diagrams */
+.content .mermaid { background: var(--card); border: 1px solid var(--rule); border-radius: 10px; padding: 18px; margin: 16px 0; text-align: center; }
+
+/* directory index pages */
+.dirlist { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.dirlist a.item { display: block; background: var(--card); border: 1px solid var(--rule); border-left: 4px solid var(--accent); border-radius: 10px; padding: 14px 18px; text-decoration: none; }
+.dirlist a.item:hover { border-color: var(--accent); box-shadow: 0 2px 10px rgba(15,92,140,.08); }
+.dirlist a.item .t { font-size: 15px; font-weight: 600; color: var(--accent); }
+.dirlist a.item .d { font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; }
+
+@media (max-width: 760px) {
+  .dochead h1 { font-size: 22px; }
+}

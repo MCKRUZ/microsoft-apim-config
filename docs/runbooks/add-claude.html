@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Runbook: Add Claude (Multi-Provider) · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">runbooks</a></p>
+  <h1>Runbook: Add Claude (Multi-Provider)</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/add-claude.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p>Add Anthropic Claude as a second model backend behind the same gateway. The showcase
+ships <strong>Azure OpenAI only</strong>; this is the multi-provider path.</p>
+<p>See <a href="../controls/unified-doorway.html">unified-doorway</a> and <a href="../caveats.html">caveats</a>.</p>
+<h2 id="hard-requirement-standardv2-tier">Hard requirement: StandardV2 tier</h2>
+<p>Anthropic <strong>token-limit and semantic-cache support is v2-only</strong>. The default Developer
+tier cannot govern Anthropic traffic with the GA controls. You must be on <strong>StandardV2</strong>
+(the production target) before adding Claude. Plan a tier move first.</p>
+<h2 id="steps">Steps</h2>
+<ol>
+<li>
+<p><strong>Move to StandardV2</strong> if not already there.</p>
+</li>
+<li>
+<p><strong>Add a backend with API format <code>Anthropic Messages</code>.</strong></p>
+</li>
+<li>
+<p>Wire it one of two ways:</p>
+</li>
+</ol>
+<ul>
+<li><strong>Preferred — unified model API.</strong> Add the Anthropic backend to the existing
+     <code>/llm/v1/chat/completions</code> doorway and create an <strong>alias</strong> for the Claude model.
+     Clients keep sending OpenAI Chat Completions shape; APIM translates to Anthropic
+     Messages. Supports failover across backends.</li>
+<li><strong>Alternative — a second LLM API.</strong> Stand up a separate Anthropic-backed API in
+     APIM.</li>
+</ul>
+<ol start="4">
+<li><strong>Apply the same four GA policies</strong> — the governance contract is identical:
+   <a href="../controls/token-limits.html">token-limits</a>,
+   <a href="../controls/cost-attribution.html">cost-attribution</a>,
+   <a href="../controls/content-safety.html">content-safety</a>,
+   <a href="../controls/semantic-cache.html">semantic-cache</a>.</li>
+</ol>
+<h2 id="caveats">Caveats</h2>
+<ul>
+<li><strong>v2-only</strong>: token-limit / cache governance for Anthropic does not exist on Developer
+  or Consumption tiers.</li>
+<li>Backend MI auth still follows the
+  <a href="../controls/content-safety.html">content-safety</a> post-deploy pattern where applicable.</li>
+<li>Prefer the unified doorway so agent code stays on the single OpenAI-shaped contract and
+  the provider switch is an alias + backend change, not a client change.</li>
+</ul>
+<h2 id="verify">Verify</h2>
+<p><code>GET /models</code> lists the new Claude alias; <code>POST /llm/v1/chat/completions</code> targeting that
+alias returns a translated completion, and the four controls (quota, metrics, safety,
+cache) apply to it.</p>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

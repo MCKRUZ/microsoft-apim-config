@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Runbook: Tune the Semantic Cache · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">runbooks</a></p>
+  <h1>Runbook: Tune the Semantic Cache</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/tune-cache.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p>Adjust how aggressively the <a href="../controls/semantic-cache.html">semantic cache</a> serves
+similar prompts. The knob is the <code>cache-score-threshold</code> named value, consumed by
+<code>llm-semantic-cache-lookup</code> in <code>infra/policies/llm-governance.xml</code>.</p>
+<h2 id="the-knob">The knob</h2>
+<p><code>score-threshold</code>: <strong>lower = stricter</strong> match.</p>
+<ul>
+<li>Default <code>0.05</code> — tight. Only near-identical prompts hit.</li>
+<li>Raise it → looser → more hits, more savings, <strong>higher risk</strong> of serving a wrong answer.</li>
+</ul>
+<h2 id="how-to-change-it">How to change it</h2>
+<p>Update the <code>cache-score-threshold</code> named value (defined in <code>infra/modules/apim.bicep</code>),
+either via parameters and redeploy, or directly:</p>
+<pre><code class="language-bash">az apim nv update -g rg-&lt;env&gt; --service-name &lt;apim-name&gt; \
+  --named-value-id cache-score-threshold --value 0.08
+</code></pre>
+<h2 id="trade-offs">Trade-offs</h2>
+<table>
+<thead>
+<tr>
+<th>Direction</th>
+<th>Effect</th>
+<th>Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Lower (→ 0.05)</td>
+<td>Fewer hits, only close matches</td>
+<td>Lower savings, safest</td>
+</tr>
+<tr>
+<td>Higher (→ 0.1+)</td>
+<td>More hits, more token savings</td>
+<td><strong>Stale / incorrect / unsafe</strong> answers</td>
+</tr>
+</tbody>
+</table>
+<p>Similarity matching can surface stale or unsafe completions — this is why content safety
+screens <strong>before</strong> cache lookup. Loosening the threshold widens that exposure, so tune up
+in small steps.</p>
+<h2 id="confirm-hit-rate">Confirm hit rate</h2>
+<ol>
+<li>Replay representative prompts via <code>scripts/smoke-test.{sh,ps1}</code>.</li>
+<li>Watch cache hits in <strong>APIM trace</strong> (per-request) and <strong>App Insights</strong> (aggregate).</li>
+<li>Compare backend token consumption before/after — a higher hit rate shows up as fewer
+   backend tokens for the same client traffic.</li>
+</ol>
+<p>Tune until the hit rate is acceptable <strong>without</strong> observed wrong answers. Start tight,
+loosen gradually.</p>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Runbook — multi-provider (Phase 6) · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">runbooks</a></p>
+  <h1>Runbook — multi-provider (Phase 6)</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/multi-provider.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p>One doorway, many models. Clients call a single <code>/llm/v1/chat/completions</code>; the gateway
+governs and routes to OpenAI, Anthropic (Claude), or Google — translating formats so the
+client never changes. Flags: <code>multiProvider</code> (the doorway/Claude, <strong>preview, v2-only</strong>) and
+<code>useKeyVault</code> (the GA secret home for the non-Azure key).</p>
+<h2 id="the-honest-split-why-part-of-this-is-a-script">The honest split (why part of this is a script)</h2>
+<table>
+<thead>
+<tr>
+<th>Piece</th>
+<th>Maturity</th>
+<th>Delivered as</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Key Vault + APIM MI access</strong> (<code>useKeyVault</code>)</td>
+<td>GA</td>
+<td>Bicep — <code>modules/keyvault.bicep</code></td>
+</tr>
+<tr>
+<td><strong>Unified doorway + Claude governance</strong> (<code>multiProvider</code>)</td>
+<td><strong>Preview, v2-only</strong></td>
+<td><code>scripts/provision-preview.*</code> + this runbook</td>
+</tr>
+</tbody>
+</table>
+<p>The unified model API and Anthropic Messages governance lack stable ARM/Bicep types and
+need an out-of-band API key — same profile as the other preview surfaces (MCP/A2A), so they
+ship as a guided script (<a href="../adr/0003-preview-via-scripts.html">ADR-0003</a>), not faked Bicep.
+<code>multiProvider</code> is therefore informational at the Bicep layer (it sets the
+<code>MULTI_PROVIDER_INTENDED</code> output the script reads), like <code>pipelineGuardrails</code>.</p>
+<h2 id="the-tier-trade-off-the-load-bearing-constraint">⚠ The tier trade-off (the load-bearing constraint)</h2>
+<blockquote>
+<p><strong>Multi-provider (v2-only) and multi-region (Premium classic only) cannot coexist in one
+instance today.</strong> (<a href="../enterprise/target-architecture.html#3-tier-decision-the-load-bearing-choice">target-architecture §3</a>)</p>
+</blockquote>
+<p>If you need both, run them as <strong>separate instances behind the same edge</strong>:
+- a <strong>Premium classic</strong> instance for multi-region OpenAI (Phase 5), and
+- a <strong>v2</strong> instance (or a <strong>self-hosted gateway sidecar</strong>) for the multi-provider doorway.</p>
+<p>A v2 instance has no multi-region; a Premium-classic instance can't do the v2 unified doorway.
+This is a current Azure limit — revisit when v2 ships multi-region.</p>
+<h2 id="secret-handling-usekeyvault">Secret handling (<code>useKeyVault</code>)</h2>
+<p>The golden copy is keyless to Azure (APIM MI calls OpenAI/Content Safety). A non-Azure
+provider key is the <strong>first real secret</strong>, and Key Vault is its home:</p>
+<ol>
+<li>Deploy with <code>useKeyVault</code> on (test/prod/regulated default it). <code>modules/keyvault.bicep</code>
+   creates the vault and grants APIM's MI <strong>Key Vault Secrets User</strong>.</li>
+<li>Store the key (out-of-band — never in a template):
+   <code>bash
+   az keyvault secret set --vault-name &lt;KEY_VAULT_NAME&gt; --name anthropic-api-key --value &lt;key&gt;</code></li>
+<li>Create a <strong>Key Vault reference</strong> named value <code>anthropic-api-key</code> → APIM resolves it at
+   runtime and rotates without redeploy. The plaintext never touches a template, output, or
+   named-value body.</li>
+</ol>
+<blockquote>
+<p>Ordering gotcha: APIM validates a KV-reference named value when it's created, so the secret
+must exist <strong>first</strong>. That's why the named value is created post-deploy (script), not in Bicep.</p>
+</blockquote>
+<h2 id="adding-claude-the-guided-flow">Adding Claude — the guided flow</h2>
+<p><code>provision-preview.*</code> (run by <code>azd up</code>, or manually) prints the steps, parameterized with your
+Key Vault + APIM names. Summary:</p>
+<ol>
+<li>Store the Anthropic key in Key Vault (above).</li>
+<li>Named value <code>anthropic-api-key</code> → the KV secret.</li>
+<li>Backend <code>https://api.anthropic.com</code>, credential header <code>x-api-key = {{anthropic-api-key}}</code>.</li>
+<li>Unified model API → add model <code>claude</code>, format <strong>Anthropic Messages</strong>, backend = the
+   Anthropic backend. <strong>Reuse the same token-limit / content-safety policies</strong> — governance is
+   provider-agnostic; that's the whole point of the doorway.</li>
+</ol>
+<h2 id="why-you-cant-just-pool-openai-claude-for-failover">Why you can't just pool OpenAI + Claude for failover</h2>
+<p>The Phase-5 <code>openai-pool</code> load-balances across backends that speak the <strong>same</strong> wire format.
+OpenAI and Anthropic Messages differ, so a raw pool failover would send OpenAI-shaped requests
+to Anthropic and fail. Cross-provider failover <strong>requires the unified doorway's translation</strong> —
+which is the v2-only preview piece. So: same-provider failover = Phase 5 (GA pool); cross-
+provider = Phase 6 (preview doorway). Don't mix them in one pool.</p>
+<h2 id="verify">Verify</h2>
+<ul>
+<li><code>useKeyVault</code>: Key Vault exists; APIM MI has <strong>Key Vault Secrets User</strong> (Access control → role
+  assignments).</li>
+<li>After the guided steps: <code>GET /llm/v1/models</code> lists both <code>gpt-4o</code> and <code>claude</code>; a call to
+  <code>/llm/v1/chat/completions</code> with <code>model: claude</code> is governed (token-limit + content-safety fire)
+  and translated. Confirm token metrics carry the model dimension.</li>
+</ul>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

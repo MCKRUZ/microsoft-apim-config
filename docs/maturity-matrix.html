@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maturity matrix — what is GA, what is preview · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../index.html">Home</a>
+  <a href="../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../docs/index.html">All docs</a>
+    <a href="../docs/caveats.html">Caveats</a>
+    <a href="../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../docs/adr/index.html">ADRs</a>
+    <a href="../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../index.html">Home</a> / <a href="index.html">docs</a></p>
+  <h1>Maturity matrix — what is GA, what is preview</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/maturity-matrix.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p>A clear-eyed reading of maturity is required before betting production governance on any of this. The <strong>cost and safety core is production-ready</strong>; the orchestration and multi-provider layers on top are still arriving. This golden copy implements the GA core as pure Bicep and the preview surfaces as guided post-deploy provisioning.</p>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Status</th>
+<th>This repo</th>
+<th>What to know</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Token limits (spend caps)</td>
+<td><strong>GA</strong></td>
+<td><code>llm-governance.xml</code> + <code>named-values.bicep</code></td>
+<td>Not on the Consumption tier. Quota counts <strong>per gateway region</strong>.</td>
+</tr>
+<tr>
+<td>Content safety screening</td>
+<td><strong>GA</strong></td>
+<td><code>llm-governance.xml</code> + <code>content-safety.bicep</code></td>
+<td>Limited on streaming responses; tuned for a handful of languages; needs a separate Content Safety resource. Backend MI auth is a <a href="caveats.html">known IaC gap</a>.</td>
+</tr>
+<tr>
+<td>Semantic caching</td>
+<td><strong>GA</strong></td>
+<td><code>llm-governance.xml</code> + <code>redis.bicep</code></td>
+<td>Needs Azure Managed Redis with <strong>RediSearch</strong> (enabled at creation only). Similarity match can surface stale answers.</td>
+</tr>
+<tr>
+<td>Cost tracking &amp; tagging</td>
+<td><strong>GA</strong></td>
+<td><code>llm-emit-token-metric</code> → App Insights</td>
+<td>Max 5 custom dimensions per policy.</td>
+</tr>
+<tr>
+<td>Per-team identity</td>
+<td><strong>GA</strong></td>
+<td><code>products.bicep</code></td>
+<td>Subscription key = team/app identity; spend + metrics keyed on it.</td>
+</tr>
+<tr>
+<td>Keyless backend auth (MI)</td>
+<td><strong>GA</strong></td>
+<td><code>rbac.bicep</code></td>
+<td>System-assigned identity; <code>Cognitive Services OpenAI User</code> + <code>Cognitive Services User</code>.</td>
+</tr>
+<tr>
+<td>Turning APIs into agent tools (MCP)</td>
+<td><strong>Preview</strong></td>
+<td><code>provision-preview.*</code> + <code>mcp-governance.xml</code></td>
+<td>Whole-server policy scope, not per-tool.</td>
+</tr>
+<tr>
+<td>Agent-to-agent traffic (A2A)</td>
+<td><strong>Preview</strong></td>
+<td><code>provision-preview.*</code> + <code>a2a-governance.xml</code></td>
+<td>JSON-RPC only; no response-body deserialization.</td>
+</tr>
+<tr>
+<td>One doorway (unified model API)</td>
+<td><strong>Preview</strong></td>
+<td><code>provision-preview.*</code></td>
+<td>OpenAI⇄Anthropic translation; rolling out; adding Claude needs StandardV2.</td>
+</tr>
+<tr>
+<td>Governing Claude through the gateway</td>
+<td><strong>v2 tiers only</strong></td>
+<td>documented path</td>
+<td>Not implemented (OpenAI-only by design); see <a href="runbooks/add-claude.html">runbooks/add-claude.md</a>.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="why-the-split-matters-for-this-repo">Why the split matters for this repo</h2>
+<ul>
+<li><strong>GA core = Infrastructure as Code.</strong> Everything in the GA rows above is deployed and version-controlled in <code>infra/</code> Bicep. It compiles clean and deploys with <code>azd up</code>.</li>
+<li><strong>Preview surfaces = guided post-deploy.</strong> MCP, A2A, and the unified doorway lack stable ARM/Bicep resource types today, so they are provisioned through <code>scripts/provision-preview.*</code> (portal/CLI steps + doc links) rather than faked as Bicep. See <a href="adr/0003-preview-via-scripts.html">ADR-0003</a>.</li>
+<li><strong>The maturity legend is honest, not aspirational.</strong> A preview feature here is labelled <strong>PREVIEW</strong> at the top of its doc and may need rework as Microsoft changes the surface. Know what is finished before you build on it.</li>
+</ul>
+<p>Source thesis and the original maturity table: <code>matthewkruczek.ai/blog/apim-agentic-governance</code>.</p>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

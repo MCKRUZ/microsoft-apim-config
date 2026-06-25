@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADR-0003 — Preview surfaces provisioned via scripts, not Bicep · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">adr</a></p>
+  <h1>ADR-0003 — Preview surfaces provisioned via scripts, not Bicep</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/adr/0003-preview-via-scripts.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p><strong>Status:</strong> Accepted · <strong>Date:</strong> 2026-06-25</p>
+<h2 id="context">Context</h2>
+<p>The user chose a full showcase including the preview surfaces (MCP server, A2A agent API, unified model API). The GA core is clean Bicep. But the preview constructs are new in 2025–2026 and their management APIs are still moving.</p>
+<h2 id="decision">Decision</h2>
+<p>Implement the <strong>GA core as pure Bicep</strong> (<code>infra/</code>). Provision the <strong>preview surfaces via post-deploy scripts</strong> (<code>scripts/provision-preview.*</code>) that attempt <code>az rest</code>/CLI where stable and otherwise print authoritative portal steps + doc links. Wire the script into <code>azd</code> as a <code>postprovision</code> hook.</p>
+<h2 id="rationale">Rationale</h2>
+<ul>
+<li>Verified: MCP server, A2A agent API, and unified model API are documented as <strong>portal/CLI/REST</strong> experiences with immature or absent stable ARM/Bicep resource types. Faking them as Bicep would be dishonest and would break on the next API revision.</li>
+<li>A guided script that points at the exact portal flow and the governance policy file to paste is more durable than brittle calls to shifting preview endpoints.</li>
+<li>Keeps a clean line: if it's in <code>infra/</code> it's GA and reproducible; if it's in <code>scripts/provision-preview.*</code> it's preview and may need updating.</li>
+</ul>
+<h2 id="also-covered-here">Also covered here</h2>
+<p>The content-safety <strong>backend managed-identity auth</strong> is a GA control that hits the same wall — it's not in the ARM backend schema (verified through <code>2025-09-01-preview</code>). It's handled by <code>scripts/configure-backend-auth.*</code> (chained from <code>provision-preview</code>), with a one-toggle portal fallback. See <a href="../caveats.html">caveats.md</a> §3.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li><code>azd up</code> provisions GA infra, then the postprovision hook configures content-safety MI and prints preview-provisioning guidance.</li>
+<li>When Microsoft ships stable Bicep types for these surfaces, migrate them from <code>scripts/</code> into <code>infra/</code> and update this ADR.</li>
+</ul>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCP Tools (agent → tool surface) · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">controls</a></p>
+  <h1>MCP Tools (agent → tool surface)</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/controls/mcp-tools.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<blockquote>
+<p><strong>PREVIEW.</strong> Management APIs are unstable and lack stable Bicep types. Provisioned via
+portal/CLI guidance in <code>scripts/provision-preview.*</code>, not declarative IaC.</p>
+</blockquote>
+<p>See <a href="../architecture.html">architecture</a> and <a href="../caveats.html">caveats</a>.</p>
+<h2 id="what-it-governs">What it governs</h2>
+<p>The <strong>agent → tool</strong> traffic surface. APIM exposes an existing REST API <em>as an MCP
+server</em>: each API operation becomes an MCP tool. The same gateway invariant holds — an
+agent reaches a tool only through APIM, so rate limits, identity, and tracing apply to
+tool calls just like model calls.</p>
+<h2 id="endpoint-shape">Endpoint / shape</h2>
+<pre><code>https://&lt;apim&gt;.azure-api.net/&lt;api&gt;-mcp/mcp
+</code></pre>
+<p>Transport: <strong>streamable HTTP</strong> at <code>/mcp</code>.</p>
+<h2 id="how-to-provision">How to provision</h2>
+<ol>
+<li>Run <code>scripts/provision-preview.{sh,ps1}</code> — it walks the preview steps (no stable Bicep
+   type exists yet).</li>
+<li>Or in the portal: select the REST API → expose as MCP server. Operations become tools.</li>
+<li>Attach the governance policy (below) at the MCP server scope.</li>
+</ol>
+<h2 id="governance-policy">Governance policy</h2>
+<p><code>infra/policies/mcp-governance.xml</code> — <code>rate-limit-by-key</code> + an agent-id trace, with an
+optional <code>validate-jwt</code>.</p>
+<pre><code class="language-xml">&lt;inbound&gt;
+    &lt;rate-limit-by-key calls=&quot;{{mcp-calls}}&quot; renewal-period=&quot;60&quot;
+        counter-key=&quot;@(context.Subscription.Id)&quot; /&gt;
+    &lt;trace source=&quot;mcp-governance&quot;&gt;
+        &lt;message&gt;@($&quot;agent={context.Request.Headers.GetValueOrDefault('x-agent-id','unknown')}&quot;)&lt;/message&gt;
+    &lt;/trace&gt;
+    &lt;!-- optional: &lt;validate-jwt .../&gt; --&gt;
+&lt;/inbound&gt;
+</code></pre>
+<h2 id="limitations-caveats">Limitations / caveats</h2>
+<ul>
+<li><strong>Governance scope is WHOLE-SERVER, not per-tool.</strong> One policy covers every tool on the
+  server; you cannot rate-limit or gate a single operation independently.</li>
+<li><strong>Do NOT access <code>context.Response.Body</code></strong> in MCP policies — it breaks streaming.</li>
+<li>Preview: endpoint shape and management surface may change.</li>
+</ul>
+<h2 id="test">Test</h2>
+<p>From VS Code (MCP-capable client), point at
+<code>https://&lt;apim&gt;.azure-api.net/&lt;api&gt;-mcp/mcp</code>, supply a team subscription key, and confirm
+the API operations appear as callable tools. See
+<a href="../runbooks/onboard-a-tool.html">runbooks/onboard-a-tool</a>.</p>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

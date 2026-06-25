@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cost Attribution (`llm-emit-token-metric`) · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">controls</a></p>
+  <h1>Cost Attribution (`llm-emit-token-metric`)</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/controls/cost-attribution.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p>GA control. See <a href="../architecture.html">architecture</a> and <a href="../caveats.html">caveats</a>.</p>
+<h2 id="what-it-controls">What it controls</h2>
+<p>Emits token-usage metrics to Application Insights so spend can be attributed back to a
+team, product, and agent. Without this you have a hard cap (see
+<a href="./token-limits.html">token-limits</a>) but no visibility into <em>who</em> spent <em>what</em>. For an
+agent fleet, attribution is what turns a flat bill into per-team chargeback and lets you
+spot a runaway agent before the quota trips.</p>
+<h2 id="the-policy">The policy</h2>
+<p>From <code>infra/policies/llm-governance.xml</code> (inbound):</p>
+<pre><code class="language-xml">&lt;llm-emit-token-metric namespace=&quot;ai-governance&quot;&gt;
+    &lt;dimension name=&quot;Subscription&quot; value=&quot;@(context.Subscription.Id)&quot; /&gt;
+    &lt;dimension name=&quot;Product&quot;      value=&quot;@(context.Product.Name)&quot; /&gt;
+    &lt;dimension name=&quot;API&quot;          value=&quot;@(context.Api.Name)&quot; /&gt;
+    &lt;dimension name=&quot;Client IP&quot;    value=&quot;@(context.Request.IpAddress)&quot; /&gt;
+    &lt;dimension name=&quot;Agent ID&quot;     value=&quot;@(context.Request.Headers.GetValueOrDefault('x-agent-id','unknown'))&quot; /&gt;
+&lt;/llm-emit-token-metric&gt;
+</code></pre>
+<p>Namespace is <code>ai-governance</code>. Five custom dimensions — the Azure Monitor maximum (5
+custom dimensions per policy).</p>
+<h2 id="how-its-wired-in-this-repo">How it's wired in this repo</h2>
+<ul>
+<li>Policy: <code>infra/policies/llm-governance.xml</code>.</li>
+<li>App Insights + Log Analytics provisioned in <code>infra/modules/monitoring.bicep</code>; the
+  instrumentation/logger wiring is referenced from <code>infra/modules/apim.bicep</code>.</li>
+<li><code>Agent ID</code> rides on the <code>x-agent-id</code> request header set by the calling agent.</li>
+</ul>
+<h2 id="how-to-verify">How to verify</h2>
+<ol>
+<li>Run <code>scripts/smoke-test.{sh,ps1}</code> to push a few completions through the gateway.</li>
+<li>In App Insights → Metrics, select the <code>ai-governance</code> namespace and the token metric.</li>
+<li>Split by the <code>Subscription</code> or <code>Agent ID</code> dimension — each team/agent shows its own
+   token totals.</li>
+<li>Confirm <code>team-research</code> and <code>team-platform</code> appear as distinct series.</li>
+</ol>
+<h2 id="caveats">Caveats</h2>
+<ul>
+<li><strong>Hard limit of 5 custom dimensions</strong> per policy (Azure Monitor). Adding a sixth
+  dimension means dropping one — don't exceed it or the metric silently breaks.</li>
+<li>Available on Developer and v2 tiers. <strong>Not</strong> on Consumption.</li>
+</ul>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

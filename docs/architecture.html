@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architecture — one control plane, three traffic surfaces · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../index.html">Home</a>
+  <a href="../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../docs/index.html">All docs</a>
+    <a href="../docs/caveats.html">Caveats</a>
+    <a href="../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../docs/adr/index.html">ADRs</a>
+    <a href="../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../index.html">Home</a> / <a href="index.html">docs</a></p>
+  <h1>Architecture — one control plane, three traffic surfaces</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/architecture.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<h2 id="the-thesis">The thesis</h2>
+<p>The trust boundary moved. Model-level safety governs the <em>words</em> a model produces; it cannot govern what an <em>agent does</em> — the systems it touches, the data it moves, the actions it takes. Every one of those actions crosses the same chokepoint: the moment the agent reaches out to another system. That chokepoint is the <strong>API gateway</strong>. This repo makes Azure API Management (APIM) that chokepoint, and governs all three kinds of agent traffic through it.</p>
+<h2 id="two-planes">Two planes</h2>
+<p>Microsoft's reference design draws a hard line between two layers, and this golden copy enforces it:</p>
+<ul>
+<li><strong>Rules / control plane — APIM.</strong> Spend caps, identity, content-safety screening, and the audit record. It does not care whether the underlying call is a model call, a tool call, or an agent-to-agent hand-off — the same rules, access controls, and logs cover all three.</li>
+<li><strong>Work plane — agents and backends.</strong> Where agents run, use tools, and call models.</li>
+</ul>
+<p><strong>The one invariant:</strong> every outbound call goes through the gateway. Agents are never allowed to reach a model or a tool directly. That single rule is what makes the architecture hold up over time — add a new agent platform, model vendor, or tool, and it is governed the day it arrives, because the gateway already sees all the traffic.</p>
+<h2 id="the-three-surfaces">The three surfaces</h2>
+<div class="mermaid">flowchart LR
+    subgraph WP["Work plane (agents)"]
+        A1["GitHub Copilot"]
+        A2["Custom agents"]
+        A3["ChatGPT / Claude clients"]
+    end
+
+    subgraph CP["Control plane — Azure API Management"]
+        K["Subscription key = team / app identity"]
+        LLM["Governed LLM API\n(/openai)"]
+        UNI["Unified model API (preview)\n(/llm/v1)"]
+        MCP["MCP server (preview)\n(/<api>-mcp/mcp)"]
+        A2A["A2A agent API (preview)"]
+        POL["Policies:\ntoken-limit · emit-metric\ncontent-safety · semantic-cache"]
+    end
+
+    subgraph BK["Backends"]
+        AOAI["Azure OpenAI\n(gpt-4o, embeddings)"]
+        REDIS["Azure Managed Redis\n(RediSearch)"]
+        CS["Azure AI Content Safety\n(Prompt Shields)"]
+        TOOL["REST API / MCP backend"]
+        AGENT["A2A JSON-RPC agent"]
+    end
+
+    OBS["Log Analytics + App Insights\n(token metrics, prompts, completions)"]
+
+    A1 & A2 & A3 --> K
+    K --> LLM & UNI & MCP & A2A
+    LLM --- POL
+    UNI --- POL
+    LLM --> AOAI
+    POL -. embeddings .-> AOAI
+    POL -. vectors .-> REDIS
+    POL -. screen .-> CS
+    MCP --> TOOL
+    A2A --> AGENT
+    CP --> OBS
+</div>
+<table>
+<thead>
+<tr>
+<th>Surface</th>
+<th>What it is</th>
+<th>Governed by</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>agent → model</td>
+<td>LLM API in front of Azure OpenAI</td>
+<td>four GA controls</td>
+<td><strong>GA</strong></td>
+</tr>
+<tr>
+<td>agent → tool</td>
+<td>MCP server (REST API exposed as tools)</td>
+<td>rate-limit, identity, trace (whole-server)</td>
+<td><strong>Preview</strong></td>
+</tr>
+<tr>
+<td>agent → agent</td>
+<td>A2A agent API (JSON-RPC hand-off)</td>
+<td>rate-limit, identity, OTel agent attribution</td>
+<td><strong>Preview</strong></td>
+</tr>
+<tr>
+<td>one doorway</td>
+<td>Unified model API across providers</td>
+<td>same policies, format translation</td>
+<td><strong>Preview</strong></td>
+</tr>
+</tbody>
+</table>
+<h2 id="keyless-by-design">Keyless by design</h2>
+<p>APIM authenticates to every backend with its <strong>system-assigned managed identity</strong> — no API keys live in policies, named values, or config. <code>infra/modules/rbac.bicep</code> grants the identity <code>Cognitive Services OpenAI User</code> (Azure OpenAI) and <code>Cognitive Services User</code> (Content Safety); <code>disableLocalAuth=true</code> on both cognitive accounts forbids key auth entirely.</p>
+<h2 id="where-each-control-lives">Where each control lives</h2>
+<table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Mechanism</th>
+<th>File</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Spend cap</td>
+<td><code>llm-token-limit</code></td>
+<td><code>infra/policies/llm-governance.xml</code></td>
+</tr>
+<tr>
+<td>Cost attribution</td>
+<td><code>llm-emit-token-metric</code> → App Insights</td>
+<td><code>infra/policies/llm-governance.xml</code></td>
+</tr>
+<tr>
+<td>Content safety</td>
+<td><code>llm-content-safety</code> (Prompt Shields)</td>
+<td><code>infra/policies/llm-governance.xml</code> + <code>modules/content-safety.bicep</code></td>
+</tr>
+<tr>
+<td>Semantic cache</td>
+<td><code>llm-semantic-cache-*</code> + Redis</td>
+<td><code>infra/policies/llm-governance.xml</code> + <code>modules/redis.bicep</code></td>
+</tr>
+<tr>
+<td>Team identity</td>
+<td>per-team product + subscription key</td>
+<td><code>infra/modules/products.bicep</code></td>
+</tr>
+<tr>
+<td>Observability</td>
+<td>logger + diagnostics</td>
+<td><code>infra/modules/apim.bicep</code> + <code>modules/monitoring.bicep</code></td>
+</tr>
+</tbody>
+</table>
+<p>See <a href="maturity-matrix.html">maturity-matrix.md</a> for GA-vs-preview status and <a href="caveats.html">caveats.md</a> for the limits that shaped these choices.</p>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";mermaid.initialize({startOnLoad:true,theme:"neutral"});</script>
+</body>
+</html>

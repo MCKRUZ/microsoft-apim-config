@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADR-0001 — Azure API Management as the governance gateway · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">adr</a></p>
+  <h1>ADR-0001 — Azure API Management as the governance gateway</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/adr/0001-apim-as-gateway.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p><strong>Status:</strong> Accepted · <strong>Date:</strong> 2026-06-25</p>
+<h2 id="context">Context</h2>
+<p>We need a single enforcement point for AI agent traffic — model calls, tool calls, and agent-to-agent hand-offs — where spend caps, identity, content safety, and audit live. The candidates: Azure API Management, Kong, an AWS Bedrock + separate gateway combo, or smaller players (Gravitee, Tyk, Truefoundry).</p>
+<h2 id="decision">Decision</h2>
+<p>Use <strong>Azure API Management</strong>.</p>
+<h2 id="rationale">Rationale</h2>
+<ul>
+<li>The organisation is Azure-committed (Azure/.NET/Bicep stack). For an Azure-committed org, APIM's AI controls are <strong>built in</strong> and feed the same Azure Monitor / App Insights tooling already in use — nothing extra to stitch together.</li>
+<li>APIM is the one gateway that sits in front of <strong>all three</strong> traffic surfaces (model, MCP tool, A2A) with one control plane and one set of policies.</li>
+<li>The GA core (token limits, content safety, semantic cache, cost attribution) is production-ready today.</li>
+</ul>
+<h2 id="honest-limits-why-this-isnt-an-unqualified-win">Honest limits (why this isn't an unqualified win)</h2>
+<ul>
+<li>Governing Claude needs a v2 tier; company-wide budgets need per-region math; the Consumption tier is excluded from spend controls; MCP tool governance is whole-server, not per-tool. The claim that APIM is the single <em>most complete</em> option is genuinely contested across vendors.</li>
+<li>These are acceptable because (a) we are OpenAI-only and Azure-committed, and (b) the limits are documented in <a href="../caveats.html">caveats.md</a>, not hidden.</li>
+</ul>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>We inherit APIM's tiers, quotas, and provisioning times.</li>
+<li>A non-Azure org, or one standardised on Claude as primary, should re-evaluate — the conclusion is specific to the Azure-committed context.</li>
+</ul>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

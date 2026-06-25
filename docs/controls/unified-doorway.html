@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unified Model API — "One Doorway" · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">controls</a></p>
+  <h1>Unified Model API — "One Doorway"</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/controls/unified-doorway.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<blockquote>
+<p><strong>PREVIEW.</strong> Management APIs are unstable and lack stable Bicep types. Provisioned via
+portal/CLI guidance in <code>scripts/provision-preview.*</code>, not declarative IaC.</p>
+</blockquote>
+<p>See <a href="../architecture.html">architecture</a> and <a href="../caveats.html">caveats</a>.
+Docs: https://learn.microsoft.com/azure/api-management/unified-model-api</p>
+<h2 id="what-it-governs">What it governs</h2>
+<p>A single client endpoint for <strong>all</strong> model traffic, in OpenAI Chat Completions format.
+Clients code against one contract; APIM translates to whatever backend format each model
+speaks. This decouples agent code from provider choice — the governed surface stays the
+same whether the backend is Azure OpenAI or Anthropic.</p>
+<h2 id="endpoint-shape">Endpoint / shape</h2>
+<pre><code>POST /llm/v1/chat/completions     # OpenAI Chat Completions request shape
+GET  /models                      # discovery endpoint
+</code></pre>
+<ul>
+<li>APIM translates the request to the backend format: <strong>OpenAI Chat Completions</strong> or
+  <strong>Anthropic Messages</strong>.</li>
+<li><strong>Aliases</strong> decouple client-facing model names from backend deployment names.</li>
+<li>Supports <strong>failover</strong> across backends.</li>
+</ul>
+<p>In this repo it points at <strong>Azure OpenAI only</strong>.</p>
+<h2 id="how-to-provision">How to provision</h2>
+<ol>
+<li>Run <code>scripts/provision-preview.{sh,ps1}</code> — sets up the unified API (no stable Bicep
+   type yet).</li>
+<li>Or follow the portal/CLI steps in the Microsoft Learn doc linked above.</li>
+</ol>
+<h2 id="governance">Governance</h2>
+<p>The same four GA controls apply at this API scope —
+<a href="./token-limits.html">token-limits</a>, <a href="./cost-attribution.html">cost-attribution</a>,
+<a href="./content-safety.html">content-safety</a>, <a href="./semantic-cache.html">semantic-cache</a>.</p>
+<h2 id="limitations-caveats">Limitations / caveats</h2>
+<ul>
+<li>Adding Claude = add a backend with format <strong>Anthropic Messages</strong>, and it <strong>requires
+  StandardV2 tier</strong> — Anthropic token-limit/cache support is <strong>v2-only</strong>. See
+  <a href="../runbooks/add-claude.html">runbooks/add-claude</a>.</li>
+<li>Preview: API shape and management surface may change.</li>
+</ul>
+<h2 id="test">Test</h2>
+<p><code>GET /models</code> should list the configured aliases; <code>POST /llm/v1/chat/completions</code> with a
+team key should return an OpenAI-shaped completion from the Azure OpenAI backend.</p>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

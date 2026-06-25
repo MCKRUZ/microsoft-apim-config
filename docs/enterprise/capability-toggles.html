@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Capability Toggle Catalog · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">enterprise</a></p>
+  <h1>Capability Toggle Catalog</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/capability-toggles.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p>Every governance capability as a feature flag: its parameter, default per profile, tier requirement, maturity, and how it's implemented. Profiles: <strong>D</strong>=dev, <strong>T</strong>=test, <strong>P</strong>=prod, <strong>R</strong>=regulated. <code>●</code>=on, <code>○</code>=off by default (always overridable per deploy).</p>
+<h2 id="platform-hardening-toggles">Platform / hardening toggles</h2>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Capability</th>
+<th style="text-align: center;">D</th>
+<th style="text-align: center;">T</th>
+<th style="text-align: center;">P</th>
+<th style="text-align: center;">R</th>
+<th>Tier req</th>
+<th>Maturity</th>
+<th>Implemented by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>networkIsolation</code></td>
+<td>VNet injection, Private Link, public-access OFF, NSGs</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>Premium / Premium v2 (injection); Std v2 (integration+PE)</td>
+<td>GA</td>
+<td><code>modules/network.bicep</code> (new) + <code>privateEndpoint</code> per backend</td>
+</tr>
+<tr>
+<td><code>edgeWaf</code></td>
+<td>Front Door Premium + WAF at the edge</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>any (external resource)</td>
+<td>GA</td>
+<td><code>modules/edge.bicep</code> (new)</td>
+</tr>
+<tr>
+<td><code>workspaces</code></td>
+<td>Federated per-BU workspaces + scoped RBAC + <code>&lt;base/&gt;</code> Azure Policy</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>Basic v2 / Std v2 / Premium / Premium v2 (<strong>not Developer</strong>)</td>
+<td>GA</td>
+<td><code>modules/federation.bicep</code> (workspaces + Workspace Contributor RBAC + base-inheritance policy assignment)</td>
+</tr>
+<tr>
+<td><code>entraAuth</code></td>
+<td>Entra JWT validation at the global (All APIs) scope</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>any</td>
+<td>GA</td>
+<td><code>fragments/entra-jwt.xml</code> spliced into the global policy by <code>governance-global.bicep</code></td>
+</tr>
+<tr>
+<td><code>multiRegion</code></td>
+<td>Active-active regional gateways + failover</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td><strong>Premium (classic)</strong> only</td>
+<td>GA</td>
+<td><code>additionalLocations</code> on <code>apim.bicep</code> (fails on Developer)</td>
+</tr>
+<tr>
+<td><code>availabilityZones</code></td>
+<td>Zone-redundant units</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>Premium / Premium v2</td>
+<td>GA</td>
+<td><code>zones</code> on <code>apim.bicep</code> (capacity must match zone count)</td>
+</tr>
+<tr>
+<td><code>useKeyVault</code></td>
+<td>Secrets via Key Vault references (home for non-Azure provider keys)</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>any</td>
+<td>GA</td>
+<td><code>modules/keyvault.bicep</code> (vault + APIM MI → Key Vault Secrets User); KV-ref named values added post-deploy</td>
+</tr>
+<tr>
+<td><code>pipelineGuardrails</code></td>
+<td>CI/CD what-if gate, drift detection, policy tests</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>n/a (CI)</td>
+<td>GA</td>
+<td>pipeline + scheduled drift job</td>
+</tr>
+<tr>
+<td><code>secOpsLoop</code></td>
+<td>Sentinel, Defender for APIs, budget→auto-throttle, injection-spike alerts</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>any</td>
+<td>GA</td>
+<td><code>modules/secops.bicep</code> (diag→LAW, Sentinel, action group, 2 log alerts) + <code>Microsoft.Security/pricings</code> (sub scope) + <code>scripts/throttle.*</code> actuator</td>
+</tr>
+<tr>
+<td><code>selfHostedGateway</code></td>
+<td>Hybrid / on-prem / multi-cloud gateway</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">○</td>
+<td>Developer / Premium</td>
+<td>GA</td>
+<td>self-hosted gateway resource</td>
+</tr>
+</tbody>
+</table>
+<h2 id="ai-governance-control-toggles">AI governance control toggles</h2>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Capability</th>
+<th style="text-align: center;">D</th>
+<th style="text-align: center;">T</th>
+<th style="text-align: center;">P</th>
+<th style="text-align: center;">R</th>
+<th>Tier req</th>
+<th>Maturity</th>
+<th>Implemented by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tokenRateLimit</code></td>
+<td>Per-minute TPM cap (runaway protection)</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>not Consumption</td>
+<td>GA</td>
+<td><code>llm-token-limit</code></td>
+</tr>
+<tr>
+<td><code>tokenQuota</code></td>
+<td>Monthly hard budget (per region)</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>not Consumption</td>
+<td>GA</td>
+<td><code>llm-token-limit</code></td>
+</tr>
+<tr>
+<td><code>preflightReject</code></td>
+<td>Reject oversize prompts before billing</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>not Consumption</td>
+<td>GA</td>
+<td><code>estimate-prompt-tokens="true"</code></td>
+</tr>
+<tr>
+<td><code>costAttribution</code></td>
+<td>Per-team/agent token metrics</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>all</td>
+<td>GA</td>
+<td><code>llm-emit-token-metric</code></td>
+</tr>
+<tr>
+<td><code>semanticCache</code></td>
+<td>Reuse semantically-similar completions</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">○*</td>
+<td>all (needs Redis)</td>
+<td>GA</td>
+<td><code>llm-semantic-cache-*</code> + <code>redis.bicep</code></td>
+</tr>
+<tr>
+<td><code>contentSafetyPrompt</code></td>
+<td>Jailbreak + indirect-injection screen (request)</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>all</td>
+<td>GA</td>
+<td>composed <code>llm-content-safety shield-prompt</code></td>
+</tr>
+<tr>
+<td><code>contentSafetyResponse</code></td>
+<td>Screen completions on the way out</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>all</td>
+<td>GA</td>
+<td>composed <code>enforce-on-completions</code></td>
+</tr>
+<tr>
+<td><code>customBlocklists</code></td>
+<td>Org-specific blocked terms</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>all</td>
+<td>GA</td>
+<td><code>&lt;blocklists&gt;</code> in policy</td>
+</tr>
+<tr>
+<td><code>promptLogging</code></td>
+<td>Log prompts/completions for audit</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">○*</td>
+<td>all</td>
+<td>GA</td>
+<td>API diagnostic</td>
+</tr>
+<tr>
+<td><code>dataMasking</code></td>
+<td>Hide secret headers/query in logs (NOT body — see caveats §11)</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>all</td>
+<td>GA</td>
+<td>diagnostic <code>frontend</code>/<code>backend</code> data-masking in <code>llm-api.bicep</code></td>
+</tr>
+<tr>
+<td><code>mcpTools</code></td>
+<td>Govern agent→tool (MCP)</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>Dev / v2 / Premium</td>
+<td><strong>Preview</strong></td>
+<td><code>provision-preview</code> + <code>mcp-governance.xml</code></td>
+</tr>
+<tr>
+<td><code>a2aAgents</code></td>
+<td>Govern agent→agent (A2A)</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>Dev / v2 / Premium</td>
+<td><strong>Preview</strong></td>
+<td><code>provision-preview</code> + <code>a2a-governance.xml</code></td>
+</tr>
+<tr>
+<td><code>multiProvider</code></td>
+<td>Unified doorway / Claude / Gemini</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">○</td>
+<td><strong>v2 tiers</strong></td>
+<td><strong>Preview</strong></td>
+<td><code>provision-preview.*</code> guided flow (doorway + Anthropic backend + KV-ref key); informational at Bicep layer via <code>MULTI_PROVIDER_INTENDED</code></td>
+</tr>
+<tr>
+<td><code>modelFailover</code></td>
+<td>Load-balanced backend pool + circuit breaker</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td>all</td>
+<td>GA</td>
+<td><code>chat-backend</code> (circuitBreaker) + <code>openai-pool</code> (type Pool) in <code>llm-api.bicep</code>, routed via <code>set-backend-service</code></td>
+</tr>
+</tbody>
+</table>
+<p>* In <code>regulated</code>, semantic cache and prompt-body logging default <strong>off</strong>: cache can surface a close-but-wrong answer, and raw prompt logging is a data-protection liability. Turn on deliberately with masking + tight <code>score-threshold</code>.</p>
+<blockquote>
+<p>The seven GA control flags above are <strong>composed into the policy</strong> at deploy time
+(<code>llm-api.bicep</code> splices each element into <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/infra/policies/llm-governance.xml"><code>llm-governance.xml</code></a>
+only when its flag is on). <code>customBlocklists</code> and <code>promptLogging</code> are <em>documented controls</em>
+(external config), and <code>edgeWaf</code>/<code>selfHostedGateway</code> are <em>declared-future</em>. The full per-flag
+wiring audit is in <a href="flag-status.html">flag-status.md</a>.</p>
+</blockquote>
+<h2 id="notes-on-dependencies">Notes on dependencies</h2>
+<ul>
+<li><code>multiRegion</code> and <code>multiProvider</code> are <strong>mutually exclusive in one instance today</strong> (Premium classic vs v2 — see <a href="target-architecture.html#3-tier-decision-the-load-bearing-choice">target-architecture §3</a>). The flag set validates this and fails the build if both are <code>true</code> on one instance.</li>
+<li><code>networkIsolation</code> via injection is <strong>create-time only</strong> on Premium v2 — changing it later requires recreating the instance.</li>
+<li><code>workspaces</code> requires <code>entraAuth</code> for meaningful RBAC scoping.</li>
+<li><code>secOpsLoop</code> budget→throttle writes the <code>tokens-per-minute</code> / <code>token-quota</code> named values, so it depends on <code>tokenRateLimit</code>/<code>tokenQuota</code>.</li>
+</ul>
+<h2 id="how-a-flag-flows">How a flag flows</h2>
+<pre><code>profile/flag (main.parameters) ─► flags object (config/profiles.bicep)
+   ├─► conditional module:   module net 'modules/network.bicep' = if (flags.networkIsolation) { ... }
+   ├─► conditional policy:   value: replace(loadTextContent('policies/llm-governance.xml'), '&lt;!--JWT--&gt;', flags.entraAuth ? jwtFragment : '')
+   └─► resource property:    publicNetworkAccess: flags.networkIsolation ? 'Disabled' : 'Enabled'
+</code></pre>
+<p>Policy fragments are assembled from toggles so a disabled control leaves <strong>no</strong> dead policy in the pipeline (cleaner than commented blocks).</p>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

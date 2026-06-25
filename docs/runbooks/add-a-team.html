@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Runbook: Add a Team · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">runbooks</a></p>
+  <h1>Runbook: Add a Team</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/add-a-team.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p>Onboard a new team to the gateway. A team = an APIM product + subscription; the
+<strong>subscription key is the team identity</strong> that every governance control keys off
+(token quota counter, cost-attribution dimension, cache vary-by).</p>
+<p>See <a href="../architecture.html">architecture</a>.</p>
+<h2 id="steps">Steps</h2>
+<ol>
+<li>Extend the <code>teams</code> parameter in <code>infra/modules/products.bicep</code> (or the corresponding
+   entry in <code>infra/main.parameters.json</code>). The repo ships with <code>team-research</code> and
+   <code>team-platform</code>; add your new team alongside them.</li>
+</ol>
+<p><code>bicep
+   param teams array = [
+     'team-research'
+     'team-platform'
+     'team-newgroup'   // &lt;-- add
+   ]</code></p>
+<ol start="2">
+<li>Redeploy:</li>
+</ol>
+<p><code>bash
+   azd up
+   # or: az deployment sub create -l &lt;region&gt; -f infra/main.bicep -p infra/main.parameters.json</code></p>
+<ol start="3">
+<li>Retrieve the new team's key (its identity):</li>
+</ol>
+<p><code>bash
+   az apim subscription show -g rg-&lt;env&gt; --service-name &lt;apim-name&gt; \
+     --sid team-newgroup --query primaryKey -o tsv</code></p>
+<h2 id="what-you-do-not-need-to-do">What you do NOT need to do</h2>
+<ul>
+<li><strong>No policy edits.</strong> <code>infra/policies/llm-governance.xml</code> keys every control off
+  <code>context.Subscription.Id</code>, so a new subscription is automatically rate-limited,
+  metered, and cache-isolated.</li>
+<li>Token quota, cost-attribution dimensions, and semantic-cache vary-by all bind to the
+  new subscription with no further changes.</li>
+</ul>
+<h2 id="verify">Verify</h2>
+<p>Run <code>scripts/smoke-test.{sh,ps1}</code> with the new key and confirm:</p>
+<ul>
+<li>completions return <code>200</code>,</li>
+<li>the team appears as its own series in App Insights (<code>Subscription</code> dimension — see
+  <a href="../controls/cost-attribution.html">cost-attribution</a>),</li>
+<li>it cannot read another team's cache (<a href="../controls/semantic-cache.html">semantic-cache</a>).</li>
+</ul>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

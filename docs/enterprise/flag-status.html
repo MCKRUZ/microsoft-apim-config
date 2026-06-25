@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flag wiring status — the consistency audit · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">enterprise</a></p>
+  <h1>Flag wiring status — the consistency audit</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/flag-status.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p>Every flag in <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/infra/config/profiles.json"><code>infra/config/profiles.json</code></a>, classified by
+<strong>how it is actually implemented today</strong>. The rule: a flag is either <em>wired</em> (it changes what
+deploys or what policy is composed) or <em>explicitly</em> one of the non-wired categories below — no
+flag silently does nothing while pretending otherwise.</p>
+<p>Legend: <strong>Bicep-gated</strong> = deploys/omits a resource · <strong>Policy-composed</strong> = includes/omits a
+policy element · <strong>Informational</strong> = declares intent, drives a script/CI step, no infra gate by
+design · <strong>Documented control</strong> = real control that needs external configuration, not a pure
+on/off · <strong>Declared (future)</strong> = forward contract, not yet built.</p>
+<h2 id="bicep-gated-flips-a-moduleresource-9">Bicep-gated — flips a module/resource (9)</h2>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Effect</th>
+<th>Phase</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>networkIsolation</code></td>
+<td>VNet + private endpoints + public-access-off</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>secOpsLoop</code></td>
+<td>Sentinel + diag→LAW + alerts + Defender</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>dataMasking</code></td>
+<td>Hide secret headers/query in the diagnostic</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>workspaces</code></td>
+<td>per-BU workspaces + RBAC + <code>&lt;base/&gt;</code> policy</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>entraAuth</code></td>
+<td>Entra JWT spliced into the global policy</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>availabilityZones</code></td>
+<td><code>zones</code> on the gateway</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>multiRegion</code></td>
+<td><code>additionalLocations</code> on the gateway</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>modelFailover</code></td>
+<td>circuit-breaker chat backend + pool + route</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>useKeyVault</code></td>
+<td>Key Vault + APIM MI access</td>
+<td>6</td>
+</tr>
+</tbody>
+</table>
+<h2 id="policy-composed-includesomits-a-governance-element-7">Policy-composed — includes/omits a governance element (7)</h2>
+<p>Composed in <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/infra/modules/llm-api.bicep"><code>llm-api.bicep</code></a> into the markers in
+<a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/infra/policies/llm-governance.xml"><code>llm-governance.xml</code></a>. All default <strong>on</strong>, so the
+composed policy reproduces the always-on seed; turn one <strong>off</strong> and its element is gone (no dead
+policy left behind).
+| Flag | Element / attribute |
+|---|---|
+| <code>tokenRateLimit</code> | <code>llm-token-limit</code> <code>tokens-per-minute</code> |
+| <code>tokenQuota</code> | <code>llm-token-limit</code> <code>token-quota</code> (+ period) |
+| <code>preflightReject</code> | <code>estimate-prompt-tokens</code> |
+| <code>costAttribution</code> | <code>llm-emit-token-metric</code> (whole element) |
+| <code>contentSafetyPrompt</code> | <code>llm-content-safety</code> <code>shield-prompt</code> |
+| <code>contentSafetyResponse</code> | <code>enforce-on-completions</code> |
+| <code>semanticCache</code> | <code>llm-semantic-cache-lookup</code> + <code>…-store</code> |</p>
+<h2 id="informational-drives-a-script-or-ci-step-no-infra-gate-4">Informational — drives a script or CI step, no infra gate (4)</h2>
+<p>By design these do not gate Bicep; CI/CD and preview surfaces live outside the deployment.
+| Flag | Reads it / acts on it |
+|---|---|
+| <code>pipelineGuardrails</code> | declares an env is change-controlled; the pipeline is the <code>.github/workflows/</code> + branch/env protection (<a href="../runbooks/ci-cd-pipeline.html">runbook</a>) |
+| <code>multiProvider</code> | <code>MULTI_PROVIDER_INTENDED</code> output → <code>provision-preview.*</code> prints the Claude/doorway flow (preview, v2-only) |
+| <code>mcpTools</code> | preview MCP-server surface, stood up by <code>provision-preview.*</code> (whole-server scope) |
+| <code>a2aAgents</code> | preview A2A surface, stood up by <code>provision-preview.*</code> |</p>
+<h2 id="documented-control-real-needs-external-config-2">Documented control — real, needs external config (2)</h2>
+<p>Honest about the gap: these are not a clean Bicep on/off.
+| Flag | Why, and the wiring path |
+|---|---|
+| <code>customBlocklists</code> | Needs a <strong>Content Safety blocklist</strong> created out-of-band + its id in a named value; then add a <code>&lt;blocklists&gt;</code> child to the composed <code>llm-content-safety</code>. Not injected by default (an empty blocklist id errors at runtime). |
+| <code>promptLogging</code> | Governs <strong>LLM message-body</strong> capture, which is a per-API LLM-logging / resource-log setting, <em>not</em> a policy element. The seed logs token metadata, never bodies (the safe default); turn body capture on deliberately, with <code>dataMasking</code> (<a href="../caveats.html">caveats §11</a>). |</p>
+<h2 id="declared-future-forward-contract-not-built-2">Declared (future) — forward contract, not built (2)</h2>
+<p>Present in the profile so the contract is complete; no implementation yet.
+| Flag | Planned |
+|---|---|
+| <code>edgeWaf</code> | Azure Front Door Premium + WAF (<code>modules/edge.bicep</code>) — Phase 1b |
+| <code>selfHostedGateway</code> | self-hosted gateway resource for hybrid/on-prem/multi-cloud |</p>
+<h2 id="summary">Summary</h2>
+<p>24 flags: <strong>16 wired</strong> (9 Bicep-gated + 7 policy-composed), <strong>4 informational</strong>, <strong>2 documented
+controls</strong>, <strong>2 declared-future</strong>. Nothing is silently inert. The default <code>dev</code> profile turns on
+every GA control (reproducing the original seed); <code>regulated</code> is the strict end (cache + prompt
+bodies off). The two declared-future flags and the two documented controls are the only places
+"toggleable" is aspirational rather than literal — called out here rather than hidden.</p>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

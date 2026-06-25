@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Content Safety (`llm-content-safety`) · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">controls</a></p>
+  <h1>Content Safety (`llm-content-safety`)</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/controls/content-safety.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p>GA control. See <a href="../architecture.html">architecture</a> and <a href="../caveats.html">caveats</a>.</p>
+<h2 id="what-it-controls">What it controls</h2>
+<p>Screens prompts (and optionally completions) through Azure AI Content Safety / Prompt
+Shields before they reach the model. For an agent fleet this catches two things humans
+can't review at scale: direct jailbreak attempts, and <strong>indirect prompt injection</strong>
+hidden inside tool output or RAG content that an agent is about to act on.</p>
+<h2 id="the-policy">The policy</h2>
+<p>From <code>infra/policies/llm-governance.xml</code> (inbound, before cache lookup):</p>
+<pre><code class="language-xml">&lt;llm-content-safety
+    backend-id=&quot;content-safety-backend&quot;
+    shield-prompt=&quot;true&quot;
+    enforce-on-completions=&quot;true&quot;&gt;
+    &lt;categories output-type=&quot;EightSeverityLevels&quot;&gt;
+        &lt;category name=&quot;Hate&quot;     threshold=&quot;4&quot; /&gt;
+        &lt;category name=&quot;Violence&quot; threshold=&quot;4&quot; /&gt;
+        &lt;category name=&quot;SelfHarm&quot; threshold=&quot;4&quot; /&gt;
+        &lt;category name=&quot;Sexual&quot;   threshold=&quot;4&quot; /&gt;
+    &lt;/categories&gt;
+&lt;/llm-content-safety&gt;
+</code></pre>
+<ul>
+<li><code>shield-prompt="true"</code> — Prompt Shields catches jailbreak <strong>and</strong> indirect injection
+  hidden in tool/RAG content.</li>
+<li>Categories Hate / Violence / SelfHarm / Sexual: severity <code>0–3</code> passes, <code>4–7</code> blocks
+  when <code>threshold="4"</code>.</li>
+<li><code>enforce-on-completions="true"</code> screens the response too.</li>
+<li>Returns <strong><code>403</code></strong> when blocked.</li>
+</ul>
+<h2 id="how-its-wired-in-this-repo">How it's wired in this repo</h2>
+<ul>
+<li>Policy: <code>infra/policies/llm-governance.xml</code>.</li>
+<li>Azure AI Content Safety resource provisioned in
+  <code>infra/modules/content-safety.bicep</code>; <code>disableLocalAuth=true</code>.</li>
+<li>APIM's system-assigned MI gets <strong>Cognitive Services User</strong> on the account
+  (<code>infra/modules/rbac.bicep</code>).</li>
+<li><strong>Known IaC gap:</strong> the content-safety backend's managed-identity auth is <strong>not
+  expressible</strong> in the ARM/Bicep backend schema (even <code>2025-09-01-preview</code> <code>credentials</code>
+  has no <code>managedIdentity</code> field). So the backend is created <strong>URL-only</strong> in Bicep and MI
+  auth is applied post-deploy by <code>scripts/configure-backend-auth.{sh,ps1}</code> — or one portal
+  toggle: <em>Backends → content-safety-backend → Authorization credentials → Managed
+  identity → System assigned → Resource ID <code>https://cognitiveservices.azure.com</code></em>.</li>
+</ul>
+<h2 id="how-to-verify">How to verify</h2>
+<ol>
+<li>Run <code>scripts/smoke-test.{sh,ps1}</code> with a benign prompt → <code>200</code>.</li>
+<li>Send a known jailbreak / disallowed prompt → expect <strong><code>403</code></strong>.</li>
+<li>If you get a <code>401/403</code> from the backend itself, the MI auth step was skipped — run
+   <code>scripts/configure-backend-auth.{sh,ps1}</code>.</li>
+</ol>
+<h2 id="caveats">Caveats</h2>
+<ul>
+<li><strong>Streaming</strong>: for streamed responses the policy buffers a sliding window and <strong>stops
+  forwarding events</strong> on a violation — it does <strong>not</strong> return <code>403</code>. Clients must handle a
+  truncated stream.</li>
+<li>Tuned for a <strong>limited set of languages</strong>; can misfire on others.</li>
+<li>Requires a <strong>separate Azure AI Content Safety resource</strong>.</li>
+<li>The policy itself works on all tiers (incl. Consumption), but this golden copy requires
+  <strong>Developer or v2</strong> because the co-located <code>llm-token-limit</code> spend cap is unavailable on
+  Consumption — so the full control set never runs there.</li>
+</ul>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

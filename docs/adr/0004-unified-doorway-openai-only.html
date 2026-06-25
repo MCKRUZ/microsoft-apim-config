@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADR-0004 — Unified doorway pattern, Azure OpenAI as the sole live backend · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">adr</a></p>
+  <h1>ADR-0004 — Unified doorway pattern, Azure OpenAI as the sole live backend</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/adr/0004-unified-doorway-openai-only.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p><strong>Status:</strong> Accepted · <strong>Date:</strong> 2026-06-25</p>
+<h2 id="context">Context</h2>
+<p>Two of the chosen options are in mild tension: <strong>model scope = Azure OpenAI only</strong> (every control GA-stable) but <strong>maturity stance = full showcase including the unified "one doorway"</strong>. The doorway exists precisely to abstract <em>multiple</em> providers, so a single-provider doorway is, on its face, degenerate.</p>
+<h2 id="decision">Decision</h2>
+<p>Build the <strong>unified model API doorway pattern</strong>, but point it at <strong>Azure OpenAI as the only live backend</strong>. Document adding Claude/Gemini as a backend-pool + tier change, not a rearchitecture.</p>
+<h2 id="rationale">Rationale</h2>
+<ul>
+<li>It demonstrates the article's punchline — one client-facing endpoint (<code>/llm/v1/chat/completions</code>), one set of governance policies, provider abstraction behind the door — without taking on the instability of running multiple preview-translated providers in the golden copy.</li>
+<li>Governed traffic stays single-provider and GA-stable (no Anthropic-translation preview in the hot path), satisfying the "OpenAI only" choice.</li>
+<li>The pattern is the point: the doorway stays put; you point it somewhere new. Adding Claude = add a backend (API format Anthropic Messages) + StandardV2 tier. See <a href="../runbooks/add-claude.html">runbooks/add-claude.md</a>.</li>
+</ul>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>The unified API is provisioned as a preview surface (per <a href="0003-preview-via-scripts.html">ADR-0003</a>) alongside the primary <code>/openai</code> LLM API, which remains the day-one governed path.</li>
+<li>If the org later standardises on multi-provider, the doorway is already in place — only backends and tier change.</li>
+</ul>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

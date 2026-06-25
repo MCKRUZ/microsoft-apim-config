@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Runbook — federation with workspaces (Phase 4) · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">runbooks</a></p>
+  <h1>Runbook — federation with workspaces (Phase 4)</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/federation.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p>Central control, BU autonomy. The platform team owns the gateway, the global policy
+floor, and the audit plane; each business unit gets a <strong>workspace</strong> — its own APIs,
+products, subscriptions, named values — with Entra RBAC scoped to just that workspace.
+Flags: <code>workspaces</code> (the BU containers) and <code>entraAuth</code> (the Entra JWT identity floor).</p>
+<h2 id="what-it-deploys">What it deploys</h2>
+<table>
+<thead>
+<tr>
+<th>When</th>
+<th>Resource</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>always</td>
+<td><code>modules/governance-global.bicep</code> → service <code>policy</code></td>
+<td>The <strong>All-APIs floor</strong> every scope inherits via <code>&lt;base /&gt;</code>. Correlation header + (when <code>entraAuth</code>) Entra JWT validation.</td>
+</tr>
+<tr>
+<td><code>entraAuth</code> on</td>
+<td>named values <code>entra-tenant-id</code>, <code>entra-audience</code></td>
+<td>Tenant + audience the JWT fragment validates against.</td>
+</tr>
+<tr>
+<td><code>workspaces</code> on</td>
+<td><code>modules/federation.bicep</code> → N workspaces</td>
+<td>One per BU (default: retail, networkops, finance).</td>
+</tr>
+<tr>
+<td><code>workspaces</code> on</td>
+<td>workspace <code>policy</code> (<code>&lt;base /&gt;</code>)</td>
+<td>Each BU inherits the global floor.</td>
+</tr>
+<tr>
+<td><code>workspaces</code> on</td>
+<td>role assignment (Workspace Contributor)</td>
+<td>Scoped RBAC, per BU, when an Entra group is supplied.</td>
+</tr>
+<tr>
+<td><code>workspaces</code> on</td>
+<td>Azure Policy assignment <code>apim-base-inheritance</code></td>
+<td>Built-in <code>d5448c98-…</code> audits/denies any policy that drops <code>&lt;base/&gt;</code>.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tier-requirement-workspaces-need-a-v2-premium-tier">⚠ Tier requirement — workspaces need a v2 / Premium tier</h2>
+<p>Workspaces are supported on <strong>Basic v2 / Standard v2 / Premium / Premium v2 only</strong> —
+<strong>not</strong> the Developer tier the seed defaults to. Verified against the tier feature
+comparison. <strong>Deploying <code>workspaces: true</code> on Developer will fail.</strong> So any profile
+that turns workspaces on (<code>test</code>/<code>prod</code>/<code>regulated</code>) must also set a v2/Premium SKU:</p>
+<pre><code class="language-bash">azd env set GOV_PROFILE prod
+azd env set APIM_SKU StandardV2     # or PremiumV2 — NOT Developer
+azd up
+</code></pre>
+<p>The <code>governance-global</code> floor (incl. <code>entraAuth</code>) works on <strong>every</strong> tier; only the
+workspaces half carries the tier requirement.</p>
+<h2 id="the-federation-contract-why-base-matters">The federation contract (why <code>&lt;base/&gt;</code> matters)</h2>
+<pre><code>Global (All APIs) policy   ── platform team owns ──►  &lt;base/&gt; + correlation + [Entra JWT]
+        ▲ inherited by
+Workspace policy (per BU)   ── BU team owns ───────►  &lt;base/&gt;  + (BU may ADD narrower rules)
+</code></pre>
+<p>A workspace team can <strong>add</strong> policies but cannot <strong>remove</strong> the central ones, because
+<code>&lt;base/&gt;</code> pulls the parent scope in. The built-in Azure Policy enforces this from the
+outside: drop <code>&lt;base/&gt;</code> and the policy is <strong>audited</strong> (or <strong>denied</strong>, if you set
+<code>basePolicyEffect=Deny</code>). Two independent mechanisms guarding the same invariant — the
+<code>&lt;base/&gt;</code>-presence lint in CI (Phase 2) at author time, and Azure Policy at deploy/runtime.</p>
+<h2 id="wiring-bu-rbac">Wiring BU RBAC</h2>
+<p>By default workspaces are created <strong>without</strong> RBAC assignments (the demo BUs have no real
+Entra groups). To grant a BU team scoped access, put the BU's Entra <strong>group object id</strong> in
+the workspace def and redeploy:</p>
+<pre><code class="language-bash">az deployment sub create -l eastus2 -f infra/main.bicep \
+  -p infra/main.parameters.json -p profile=prod -p apimSkuName=StandardV2 \
+  -p workspaceDefs='[{&quot;name&quot;:&quot;retail&quot;,&quot;displayName&quot;:&quot;Retail&quot;,&quot;description&quot;:&quot;Retail BU&quot;,&quot;adminGroupId&quot;:&quot;&lt;group-object-id&gt;&quot;}]'
+</code></pre>
+<p>This module assigns <strong>API Management Workspace Contributor</strong> (<code>0c34c906-…</code>) at the
+workspace scope. Per Microsoft's model a collaborator <strong>also needs a service-scoped
+workspace role</strong> (<code>API Management Service Workspace API Developer</code> / <code>…Product Manager</code>)
+assigned at the service scope — assign that separately (it grants the cross-cutting read
+access workspace roles don't). Custom least-privilege roles are the production path.</p>
+<h2 id="entra-jwt-the-entraauth-flag">Entra JWT (the <code>entraAuth</code> flag)</h2>
+<p>When on, the global policy requires a valid Entra ID token (<code>Authorization: Bearer …</code>)
+for the configured audience on <strong>every</strong> API. Configure tenant + audience:</p>
+<pre><code class="language-bash">az deployment sub create ... -p profile=test \
+  -p entraTenantId=&lt;tenant-guid&gt; -p entraAudience='api://apim-ai-gateway'
+</code></pre>
+<p><code>entraTenantId</code> defaults to the <strong>deploying tenant</strong>; <code>entraAudience</code> defaults to
+<code>api://apim-ai-gateway</code> — set it to your app registration's Application ID URI.</p>
+<blockquote>
+<p><strong>Smoke test note:</strong> <code>scripts/smoke-test.*</code> calls with a subscription key only. With
+<code>entraAuth</code> on it will get <strong>401</strong> until you also send a bearer token — that's the
+intended posture (subscription key = team attribution; JWT = security identity). Run
+the smoke test against a <code>dev</code>-profile deploy, or extend it to fetch a token.</p>
+</blockquote>
+<h2 id="verify-after-deploy">Verify after deploy</h2>
+<ul>
+<li>Portal → APIM → <strong>Workspaces</strong> → the BU workspaces are listed.</li>
+<li>Portal → APIM → workspace → <strong>Policies</strong> → the <code>&lt;base/&gt;</code> policy is present.</li>
+<li>Portal → <strong>Policy</strong> → Assignments → <code>apim-base-inheritance</code> present (Audit/Deny).</li>
+<li>With <code>entraAuth</code> on: a key-only call returns <strong>401</strong>; a call with a valid token for the
+  audience returns <strong>200</strong>.</li>
+<li>Calculate effective policy on a workspace API → confirm the global floor is inherited.</li>
+</ul>
+<h2 id="honest-constraints">Honest constraints</h2>
+<ul>
+<li><strong>Workspace gateways</strong> (runtime isolation per BU) and <strong>workspace-level diagnostic
+  settings</strong> (federated logging) are additional resources not deployed here — this phase
+  establishes the workspace + RBAC + inheritance model on the default managed gateway.
+  Add workspace gateways when a mission-critical BU needs runtime isolation.</li>
+<li>Workspace <strong>gateway provisioning can take hours</strong>; plan BU onboarding accordingly.</li>
+<li>MCP/A2A preview surfaces are <strong>not yet supported inside workspaces</strong> — keep those at
+  the service scope for now.</li>
+</ul>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

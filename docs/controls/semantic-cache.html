@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Semantic Cache (`llm-semantic-cache-lookup` / `-store`) · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">controls</a></p>
+  <h1>Semantic Cache (`llm-semantic-cache-lookup` / `-store`)</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/controls/semantic-cache.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p>GA control. See <a href="../architecture.html">architecture</a> and <a href="../caveats.html">caveats</a>.</p>
+<h2 id="what-it-controls">What it controls</h2>
+<p>Returns a cached completion when an incoming prompt is <em>semantically similar</em> to a prior
+one — not just byte-identical. Agents re-ask near-duplicate questions constantly; serving
+those from cache cuts token spend and latency. Lookup runs inbound; store runs outbound.</p>
+<h2 id="the-policy">The policy</h2>
+<p>From <code>infra/policies/llm-governance.xml</code>:</p>
+<pre><code class="language-xml">&lt;!-- inbound, LAST in order (after content-safety) --&gt;
+&lt;llm-semantic-cache-lookup
+    score-threshold=&quot;{{cache-score-threshold}}&quot;
+    embeddings-backend-id=&quot;embeddings-backend&quot;
+    embeddings-backend-auth=&quot;system-assigned&quot;&gt;
+    &lt;vary-by&gt;@(context.Subscription.Id)&lt;/vary-by&gt;
+&lt;/llm-semantic-cache-lookup&gt;
+</code></pre>
+<pre><code class="language-xml">&lt;!-- outbound --&gt;
+&lt;llm-semantic-cache-store duration=&quot;3600&quot; /&gt;
+</code></pre>
+<p><code>score-threshold</code>: <strong>lower = stricter</strong> match. Start tight — default <code>0.05</code>.
+<code>vary-by</code> subscription so teams cannot read each other's cached answers.</p>
+<h2 id="how-its-wired-in-this-repo">How it's wired in this repo</h2>
+<ul>
+<li>Policy: <code>infra/policies/llm-governance.xml</code>.</li>
+<li>Azure Managed Redis (with the <strong>RediSearch</strong> module) provisioned in
+  <code>infra/modules/redis.bicep</code> and registered as the APIM external cache.</li>
+<li><code>text-embedding-3-small</code> deployment (<code>embeddings</code>) on the Azure OpenAI account
+  (<code>infra/modules/openai.bicep</code>), surfaced as the <code>embeddings-backend</code> whose MI auth is
+  the <code>embeddings-backend-auth="system-assigned"</code> attribute.</li>
+<li><code>cache-score-threshold</code> is a named value — tune via
+  <a href="../runbooks/tune-cache.html">runbooks/tune-cache</a>.</li>
+</ul>
+<h2 id="how-to-verify">How to verify</h2>
+<ol>
+<li>Run <code>scripts/smoke-test.{sh,ps1}</code> twice with the <em>same</em> prompt; the second response
+   should be served from cache (much lower latency, no backend token burn).</li>
+<li>Send a <em>reworded but equivalent</em> prompt — still a hit at the default threshold.</li>
+<li>Confirm a different team key does <strong>not</strong> hit the first team's cache (vary-by).</li>
+<li>Cache hit rate is visible via APIM trace / App Insights.</li>
+</ol>
+<h2 id="caveats">Caveats</h2>
+<ul>
+<li><strong>RediSearch can only be enabled at cache CREATION</strong> — it cannot be retrofitted. A
+  Redis instance built without it must be replaced, not upgraded.</li>
+<li>Similarity matching can surface <strong>stale, incorrect, or unsafe</strong> answers. That is why
+  <code>llm-content-safety</code> runs <strong>before</strong> the cache lookup — safety screens first, cache
+  serves second. Do not reorder.</li>
+<li>Available on Developer and v2 tiers. <strong>Not</strong> on Consumption.</li>
+</ul>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

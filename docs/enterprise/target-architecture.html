@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enterprise Target Architecture · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">enterprise</a></p>
+  <h1>Enterprise Target Architecture</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/target-architecture.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p>The production target for this golden copy at enterprise scale (Dell / T-Mobile class): tens of thousands of agents, dozens of business units, multi-region, audited, and <strong>every capability toggleable</strong> per environment and per business unit.</p>
+<p>This document is the target. The current repo is the GA core seed; <a href="#9-gap--rollout">§9 Gap &amp; rollout</a> maps seed → target.</p>
+<hr />
+<h2 id="1-principles">1. Principles</h2>
+<ol>
+<li><strong>The chokepoint is the only enforcement point.</strong> Every model/tool/agent call transits APIM. At enterprise scale this is enforced by <em>network</em>, not honour system: backends have no public path (§4).</li>
+<li><strong>Central governance, federated autonomy.</strong> A platform team owns the gateway, the all-APIs policies, and the audit plane. Business-unit teams own their APIs/agents inside <strong>workspaces</strong> with scoped RBAC. (§5)</li>
+<li><strong>Everything is a toggle.</strong> Each capability is a feature flag with a per-environment/per-BU default. A "regulated" profile turns everything on; a "dev" profile is permissive. (§8)</li>
+<li><strong>Defense in depth.</strong> Network isolation, identity, content safety, and audit are independent layers; any one failing open is caught by another and alarmed.</li>
+<li><strong>Policy-as-code, change-controlled.</strong> No portal edits in production. Policy changes flow through a reviewed pipeline with <code>what-if</code> and drift detection. (§7)</li>
+<li><strong>Honest maturity.</strong> GA controls are load-bearing; preview surfaces (MCP/A2A/unified) are isolated so a preview change can't take down production governance.</li>
+</ol>
+<hr />
+<h2 id="2-reference-topology">2. Reference topology</h2>
+<div class="mermaid">flowchart TB
+    subgraph Edge["Edge"]
+        FD["Azure Front Door Premium + WAF"]
+    end
+    subgraph Hub["Hub VNet (per region)"]
+        APIM["APIM Premium / Premium v2\n(VNet injected, private VIP)"]
+        PE["Private Endpoints"]
+        KV["Key Vault"]
+        OBS["Log Analytics · App Insights · Sentinel"]
+    end
+    subgraph BU["Business-unit workspaces (logical)"]
+        WS1["Workspace: Retail"]
+        WS2["Workspace: Network Ops"]
+        WS3["Workspace: Finance"]
+    end
+    subgraph Backends["Spoke VNets / Private backends"]
+        AOAI["Azure OpenAI (Private Link, public access OFF)"]
+        REDIS["Azure Managed Redis (Private Link)"]
+        CS["Content Safety (Private Link)"]
+        TOOLS["Internal REST APIs / MCP backends"]
+        AGENTS["A2A agents"]
+    end
+
+    FD --> APIM
+    APIM --- WS1 & WS2 & WS3
+    APIM --> PE
+    PE -.private.-> AOAI & REDIS & CS & TOOLS & AGENTS
+    APIM --> KV
+    APIM --> OBS
+</div>
+<p>No backend has a public path. Inbound is private-endpoint or Front-Door-only; public network access is <strong>disabled</strong> on APIM and every cognitive/Redis resource.</p>
+<hr />
+<h2 id="3-tier-decision-the-load-bearing-choice">3. Tier decision (the load-bearing choice)</h2>
+<p>Verified against Microsoft Learn (June 2026):</p>
+<table>
+<thead>
+<tr>
+<th>Need</th>
+<th>Premium (classic)</th>
+<th>Premium v2</th>
+<th>Standard v2</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Multi-region active-active</td>
+<td>✅</td>
+<td>❌ <em>(not yet on v2)</em></td>
+<td>❌</td>
+</tr>
+<tr>
+<td>Availability zones</td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>VNet injection (full inbound+outbound isolation)</td>
+<td>✅</td>
+<td>✅ (at create only)</td>
+<td>❌ (integration + private endpoint only)</td>
+</tr>
+<tr>
+<td>Outbound VNet integration / inbound private endpoint</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Workspaces (federation)</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>GA AI controls (token-limit, content-safety, cache, metrics)</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Unified doorway / <strong>Anthropic</strong> governance</td>
+<td>❌ <em>(v2-only feature)</em></td>
+<td>✅ (preview)</td>
+<td>✅ (preview)</td>
+</tr>
+<tr>
+<td>Self-hosted gateway (hybrid/on-prem/multi-cloud)</td>
+<td>✅</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The unavoidable trade today:</strong> multi-region active-active (Premium classic) <strong>vs</strong> in-gateway multi-provider/Claude (v2). You cannot have both in one instance right now.</p>
+<p><strong>Recommendation:</strong> for a Dell/T-Mobile-class deployment whose first requirement is resilience and global latency, anchor on <strong>Premium (classic), multi-region, zone-redundant, VNet-injected</strong>, and govern OpenAI in-gateway. Add Claude via a <strong>separate v2 instance or a self-hosted/sidecar</strong> behind the same edge until v2 gains multi-region — modelled as the <code>multiProvider</code> toggle routing to a v2 backend. Make the tier a parameter so the decision is reversible.</p>
+<hr />
+<h2 id="4-network-isolation-enablenetworkisolation">4. Network isolation (<code>enableNetworkIsolation</code>)</h2>
+<p>The toggle that makes Principle 1 <em>true</em> rather than aspirational.
+- <strong>VNet injection</strong> (Premium / Premium v2) → APIM gets a private VIP; inbound + outbound isolated. Injection is <strong>create-time only</strong> — bake it into the first deploy.
+- <strong>Private Link + public access OFF</strong> on Azure OpenAI, Content Safety, Azure Managed Redis. With public access disabled, the OpenAI endpoint is useless without the private path — the bypass risk in the seed is closed.
+- <strong>Front Door Premium + WAF</strong> at the edge for external consumers; private endpoint to the gateway (supported for v2 when fronted by Front Door Premium).
+- <strong>NSGs</strong> on every subnet (allow Storage + Key Vault dependencies, deny internet egress by default).
+- Optional <strong>Network Security Perimeter</strong> around the PaaS resources for a trusted boundary.
+- Azure Policy <code>API Management services should use a virtual network</code> enforced in audit→deny.</p>
+<h2 id="5-federation-with-workspaces-enableworkspaces">5. Federation with workspaces (<code>enableWorkspaces</code>)</h2>
+<p>The org-scale governance model — central control, BU autonomy.
+- One <strong>workspace per business unit / API team</strong>; each holds its own APIs, products, subscriptions, named values. Access via <strong>Entra RBAC scoped to the workspace</strong>.
+- The <strong>platform team</strong> applies <strong>all-APIs (global) policies</strong> — the four AI controls — that every workspace inherits; BU teams add only narrower policies. The built-in Azure Policy <code>API Management policies should inherit parent scope using &lt;base/&gt;</code> is enforced so a BU can't strip a central control.
+- <strong>Workspace gateways</strong> for runtime isolation of mission-critical BUs (a misbehaving Retail agent can't exhaust Finance's gateway); shared default gateway for the long tail.
+- Federated observability: each BU sees its own logs; the platform team sees all (compliance oversight).</p>
+<h2 id="6-identity-access-identitymode-subscription-entra-both">6. Identity &amp; access (<code>identityMode</code>: <code>subscription</code> | <code>entra</code> | <code>both</code>)</h2>
+<ul>
+<li><strong>Backend auth:</strong> APIM managed identity only; keys disabled. (Seed already does this.)</li>
+<li><strong>Caller identity:</strong> subscription key = team attribution; <strong>Entra JWT validation</strong> for real security identity on the model, tool, and agent surfaces. At enterprise scale, <strong>per-agent workload identities</strong> (Entra) so audit attributes an action to <em>an agent</em>, not just a team.</li>
+<li><strong>Tool/A2A authorization:</strong> <code>validate-jwt</code> (templated in <code>mcp-governance.xml</code> / <code>a2a-governance.xml</code>) gating tool and hand-off calls.</li>
+<li><strong>Gateway RBAC:</strong> least-privilege custom roles; policy authors ≠ deployers; break-glass account with PIM + alerting.</li>
+</ul>
+<h2 id="7-policy-lifecycle-cicd-enablepipelineguardrails">7. Policy lifecycle &amp; CI/CD (<code>enablePipelineGuardrails</code>)</h2>
+<ul>
+<li>Policy-as-code in git → PR review → <code>bicep build</code> lint → <code>az deployment ... --what-if</code> → staged apply (dev → staging APIM → prod).</li>
+<li><strong>Drift detection</strong>: scheduled compare of live policy vs repo; portal edits in prod alarm and auto-revert.</li>
+<li><strong>Policy unit tests</strong>: contract tests that fire known payloads (jailbreak, over-cap, oversized) at a staging instance and assert the block — the <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/scripts/smoke-test.sh">smoke-test</a> suite, run in CI against staging.</li>
+<li>Promote via APIM DevOps Resource Kit / azd environments per stage.</li>
+</ul>
+<h2 id="8-secrets-config-usekeyvault">8. Secrets &amp; config (<code>useKeyVault</code>)</h2>
+<ul>
+<li>All config-as-secret (any backend connection strings, third-party keys, JWT signing references) via <strong>Key Vault references</strong> in named values; rotation without redeploy. The seed is already keyless to cognitive services; this covers everything else (e.g., a non-Azure tool's API key behind the gateway).</li>
+</ul>
+<h2 id="9-observability-action-enablesecopsloop">9. Observability → action (<code>enableSecOpsLoop</code>)</h2>
+<p>Telemetry is not governance; the closed loop is.
+- Token/prompt/completion logs → Log Analytics; token metrics → App Insights (seed does this).
+- <strong>Microsoft Sentinel</strong> ingest for SIEM correlation; <strong>Defender for APIs</strong> for threat protection on APIM.
+- <strong>Action</strong>, not just dashboards: budget-threshold alerts → auto-throttle (lower the token-limit named value); injection-rate spike → alert + optional surface quarantine; per-agent anomaly detection on spend.
+- KQL workbooks per BU; executive FinOps view (cost per team/agent/model).</p>
+<h2 id="10-data-protection-enablepromptlogging-datamasking">10. Data protection (<code>enablePromptLogging</code> + <code>dataMasking</code>)</h2>
+<p>Logging prompts/completions for audit <em>is</em> a data-protection obligation.
+- Diagnostic <strong>data masking</strong> on prompt/completion logs (PII redaction) before they land.
+- Retention + access policy on the Log Analytics workspace; least-privilege on audit data.
+- Data-residency: pin logging + (where required) customer data to region; note the single-region customer-data caveat.
+- Toggle off prompt-body logging entirely for the most sensitive BUs (keep metrics only).</p>
+<hr />
+<h2 id="ai-governance-capability-catalog">AI governance capability catalog</h2>
+<p>Each is an independent toggle (see <a href="capability-toggles.html">capability-toggles.md</a>). Grouped by domain:</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Domain</th>
+<th>Capabilities</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Cost / FinOps</strong></td>
+<td>hard token quota · TPM rate limit · pre-flight rejection · semantic cache · per-team/agent attribution · budget alerts → auto-throttle · PTU vs PAYG routing</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Threat / security</strong></td>
+<td>Prompt Shields (jailbreak) · indirect-injection screening · response screening · Defender for APIs · WAF · egress containment</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Identity / access</strong></td>
+<td>managed-identity backends · Entra JWT (model/tool/agent) · per-agent workload identity · workspace RBAC · gateway RBAC + PIM</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Content / safety</strong></td>
+<td>harm categories + thresholds · custom blocklists · request + completion enforcement · per-BU policy overrides</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>Data / privacy</strong></td>
+<td>prompt-log masking · retention · residency pinning · log access control · logging on/off per BU</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>Tool (MCP)</strong></td>
+<td>tool exposure · rate-limit · identity · agent-id audit · (whole-server scope today)</td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong>Agent-to-agent (A2A)</strong></td>
+<td>hand-off rate-limit · identity · OTel agent attribution</td>
+</tr>
+<tr>
+<td>8</td>
+<td><strong>Model lifecycle</strong></td>
+<td>unified doorway · multi-provider routing · model aliasing · failover pools · version pinning · region routing</td>
+</tr>
+<tr>
+<td>9</td>
+<td><strong>Audit / evidence</strong></td>
+<td>token metrics · prompt/completion logs · Sentinel · per-BU + federated views · immutable audit retention</td>
+</tr>
+<tr>
+<td>10</td>
+<td><strong>Reliability</strong></td>
+<td>multi-region · availability zones · backend load-balanced pools · circuit breakers · retries · capacity autoscale</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="8-the-toggle-model">8. The toggle model</h2>
+<pre><code class="language-bicep">// infra/config/profiles.bicep (target) — a capability flag set per environment.
+@allowed(['dev','test','prod','regulated'])
+param profile string
+
+var flags = {
+  dev:       { networkIsolation: false, workspaces: false, entraAuth: false, promptLogging: true,  dataMasking: false, secOpsLoop: false, multiRegion: false, multiProvider: false }
+  test:      { networkIsolation: true,  workspaces: false, entraAuth: true,  promptLogging: true,  dataMasking: true,  secOpsLoop: false, multiRegion: false, multiProvider: false }
+  prod:      { networkIsolation: true,  workspaces: true,  entraAuth: true,  promptLogging: true,  dataMasking: true,  secOpsLoop: true,  multiRegion: true,  multiProvider: false }
+  regulated: { networkIsolation: true,  workspaces: true,  entraAuth: true,  promptLogging: false, dataMasking: true,  secOpsLoop: true,  multiRegion: true,  multiProvider: false }
+}
+</code></pre>
+<ul>
+<li>Profiles set defaults; individual flags override per deploy. Each flag gates <strong>conditional module deployment</strong> (<code>module x '...' = if (flags.networkIsolation) {...}</code>) and/or <strong>policy fragment inclusion</strong>.</li>
+<li>Per-BU overrides live in the workspace layer, within guardrails the platform team sets (a BU can be <em>stricter</em>, never <em>looser</em> — enforced by the <code>&lt;base/&gt;</code>-inheritance Azure Policy).</li>
+<li>The full flag → capability → tier-requirement → GA/preview matrix is in <a href="capability-toggles.html">capability-toggles.md</a>.</li>
+</ul>
+<hr />
+<h2 id="9-gap-rollout">9. Gap &amp; rollout</h2>
+<p>Seed (today) → enterprise target, in dependency order. Each step is independently shippable.</p>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Adds</th>
+<th>Toggles</th>
+<th>Why first</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0 (done)</td>
+<td>GA core: 4 controls, keyless, per-team products, IaC</td>
+<td>—</td>
+<td>the chokepoint exists</td>
+</tr>
+<tr>
+<td>1 (done)</td>
+<td><strong>Network isolation</strong> (VNet injection + Private Link + public-access-off + WAF)</td>
+<td><code>networkIsolation</code></td>
+<td>makes the chokepoint <em>true</em>; highest risk if skipped</td>
+</tr>
+<tr>
+<td>2 (done)</td>
+<td><strong>CI/CD guardrails</strong> + drift detection + policy tests</td>
+<td><code>pipelineGuardrails</code></td>
+<td>so policy-as-code means something; stops portal drift</td>
+</tr>
+<tr>
+<td>3 (done)</td>
+<td><strong>SecOps loop</strong> (Sentinel, Defender, budget→throttle, masking)</td>
+<td><code>secOpsLoop</code>, <code>dataMasking</code></td>
+<td>enforcement, not observation; audit-ready</td>
+</tr>
+<tr>
+<td>4 (done)</td>
+<td><strong>Federation</strong> (workspaces per BU, scoped RBAC, <code>&lt;base/&gt;</code> Azure Policy)</td>
+<td><code>workspaces</code>, <code>entraAuth</code></td>
+<td>scales to dozens of BUs without losing central control</td>
+</tr>
+<tr>
+<td>5 (done)</td>
+<td><strong>Reliability</strong> (multi-region/AZ, failover pools, capacity/PTU)</td>
+<td><code>multiRegion</code>, <code>availabilityZones</code>, <code>modelFailover</code></td>
+<td>survives a region; tier decision (§3) lands here</td>
+</tr>
+<tr>
+<td>6 (done)</td>
+<td><strong>Multi-provider</strong> (unified doorway / Claude, v2 or sidecar)</td>
+<td><code>multiProvider</code>, <code>useKeyVault</code></td>
+<td>provider independence; preview, isolated</td>
+</tr>
+</tbody>
+</table>
+<p>Compliance obligations satisfied at each phase: <a href="compliance-mapping.html">compliance-mapping.md</a>.</p>
+<hr />
+<h2 id="honest-constraints-carried-into-the-target">Honest constraints carried into the target</h2>
+<ul>
+<li>The <strong>multi-region vs multi-provider</strong> tier conflict (§3) is a current Azure limit, not a design miss. Revisit when v2 ships multi-region.</li>
+<li>VNet <strong>injection is create-time only</strong> (Premium v2) — get it right on first deploy or rebuild.</li>
+<li>Workspace <strong>gateway provisioning can take hours</strong>; plan BU onboarding accordingly.</li>
+<li>Preview surfaces (MCP per-tool scope, A2A response-side, unified doorway) carry the <a href="../caveats.html">caveats</a>; they're toggled and isolated for that reason.</li>
+</ul>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";mermaid.initialize({startOnLoad:true,theme:"neutral"});</script>
+</body>
+</html>

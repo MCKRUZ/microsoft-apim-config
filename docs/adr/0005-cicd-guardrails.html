@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADR-0005 — CI/CD guardrails: reviewed pipeline + drift detection · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">adr</a></p>
+  <h1>ADR-0005 — CI/CD guardrails: reviewed pipeline + drift detection</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/adr/0005-cicd-guardrails.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p><strong>Status:</strong> Accepted · <strong>Date:</strong> 2026-06-25</p>
+<h2 id="context">Context</h2>
+<p>Principle 5 of the <a href="../enterprise/target-architecture.html">target architecture</a> is
+"policy-as-code, change-controlled — no portal edits in production." That is only real if
+two things exist: a pipeline that is the <em>only</em> write path to a deployed gateway, and a
+detector that catches edits made around it. This is Phase 2 (<code>pipelineGuardrails</code>).</p>
+<h2 id="decision">Decision</h2>
+<ul>
+<li><strong>GitHub Actions</strong>, not Azure DevOps — the repo's GitHub-native and <code>gh</code> is the standard tool here.</li>
+<li><strong>OIDC federated credentials</strong>, no stored cloud secrets — a short-lived token per environment (rules/security.md).</li>
+<li><strong>Staged promotion</strong> <code>dev → test → prod</code> via a reusable per-stage workflow; <code>test</code>/<code>prod</code> are
+  GitHub <strong>Environments</strong> with required-reviewer rules — the approval gate is platform-enforced,
+  not convention.</li>
+<li><strong>what-if before every apply</strong>; <strong>smoke-test gates promotion</strong> (a control regression stops the rollout).</li>
+<li><strong>Scheduled drift detection</strong> runs the repo as a what-if against live environments; mutating
+  changes fail the job and open a tracked issue.</li>
+<li><strong>Structural policy lint, not DOM validation.</strong></li>
+</ul>
+<h2 id="rationale-for-the-structural-linter">Rationale for the structural linter</h2>
+<p>APIM policy XML is not well-formed XML: expression attributes embed C# with nested double
+quotes, e.g. <code>counter-key="@(context.Subscription?.Id ?? "anonymous")"</code>. <code>xmllint</code> / ElementTree
+would reject every valid policy. So <code>scripts/lint-policies.*</code> checks structure instead — sections
+present and closed, <code>&lt;base /&gt;</code> inheritance in each section, balanced <code>{{named-value}}</code> tokens, no
+hardcoded secrets. The <code>&lt;base /&gt;</code> check is the CI mirror of the Azure Policy <em>"policies should
+inherit parent scope using <code>&lt;base/&gt;</code>"</em>, so a BU/workspace policy can't strip a central control —
+caught at PR time, not just at runtime.</p>
+<h2 id="the-flag-is-informational-by-design">The flag is informational, by design</h2>
+<p><code>pipelineGuardrails</code> does <strong>not</strong> gate a Bicep module — CI/CD is outside the deployment. It is a
+declaration that an environment is change-controlled (used for compliance assertions), not an
+infrastructure switch. Documented in the <a href="../runbooks/ci-cd-pipeline.html">runbook</a> so no one
+expects flipping it to create the pipeline. The pipeline is the <code>.github/workflows/</code> files plus
+branch/environment protection.</p>
+<h2 id="consequences">Consequences</h2>
+<ul>
+<li>Merges to <code>main</code> require green <code>validate</code>; deploys require approvals; prod has no portal write path.</li>
+<li>One-time setup cost: federated credentials + GitHub Environments + branch protection (runbook §"One-time setup").</li>
+<li>The same lint/drift scripts run locally, so developers catch issues before pushing.</li>
+<li>When workspaces land (Phase 4), the <code>&lt;base /&gt;</code> lint and the Azure Policy enforce the same
+  inheritance invariant from two directions.</li>
+</ul>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

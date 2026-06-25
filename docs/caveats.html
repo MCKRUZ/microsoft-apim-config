@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caveats — the limits that shaped this design · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../index.html">Home</a>
+  <a href="../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../docs/index.html">All docs</a>
+    <a href="../docs/caveats.html">Caveats</a>
+    <a href="../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../docs/adr/index.html">ADRs</a>
+    <a href="../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../index.html">Home</a> / <a href="index.html">docs</a></p>
+  <h1>Caveats — the limits that shaped this design</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/caveats.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p>Every claim here is a real constraint verified against Microsoft Learn (June 2026), not a hedge. A golden copy that hides these would be lying. Read this before you bet production governance on the gateway.</p>
+<h2 id="1-token-quotas-count-per-gateway-region-not-globally">1. Token quotas count per gateway region, not globally</h2>
+<p>The newer <code>llm-token-limit</code> token quota is enforced <strong>per gateway instance/region</strong>. Run the gateway in three regions and a "1,000,000 tokens/month" cap is really 1M <em>per region</em> — 3M total. (The older request-counting limits DID sum across regions; this one does not.) A company-wide budget needs per-region math, or a single-region gateway. Single-region is the default here.</p>
+<h2 id="2-the-consumption-tier-has-no-spend-controls">2. The Consumption tier has no spend controls</h2>
+<p><code>llm-token-limit</code> and load-balancing are <strong>not available on the Consumption tier</strong>. This repo defaults to <strong>Developer</strong> (cheapest tier that supports the full OpenAI-only showcase) and documents <strong>StandardV2</strong> as the production target. Never put this governance on Consumption — the spend cap simply won't be there.</p>
+<h2 id="3-content-safety-backend-managed-identity-auth-is-a-known-iac-gap">3. Content-safety backend managed-identity auth is a known IaC gap</h2>
+<p>The <code>llm-content-safety</code> policy calls the <code>content-safety-backend</code> entity as a black box, so the APIM managed identity must live <strong>on the backend entity</strong>. That is <strong>not expressible in the ARM/Bicep backend schema</strong> — verified: even <code>Microsoft.ApiManagement/service/backends@2025-09-01-preview</code> <code>credentials</code> exposes only <code>authorization</code>/<code>header</code>/<code>query</code>/<code>certificate</code>, no managed identity. So:
+- Bicep creates the backend <strong>URL-only</strong> (<code>infra/modules/llm-api.bicep</code>).
+- MI auth is applied <strong>post-deploy</strong> by <code>scripts/configure-backend-auth.{sh,ps1}</code>, or by one portal toggle: <em>Backends → content-safety-backend → Authorization credentials → Managed identity → System assigned → Resource ID <code>https://cognitiveservices.azure.com</code></em>.
+- Until that step runs, content-safety screening returns errors. The smoke test flags this explicitly.</p>
+<p>The chat-call and embeddings MI auth do NOT hit this gap — they're handled by the <code>authentication-managed-identity</code> policy and the <code>embeddings-backend-auth</code> attribute respectively, not the backend entity.</p>
+<h2 id="4-content-safety-is-real-protection-not-a-force-field">4. Content safety is real protection, not a force field</h2>
+<ul>
+<li><strong>Streaming responses:</strong> the policy buffers a sliding window and stops forwarding events on a violation, but does <strong>not</strong> return a 403. Clients see a truncated stream, not a clean block.</li>
+<li><strong>Languages:</strong> Prompt Shields is tuned for a limited set of languages and can misfire in others.</li>
+<li><strong>Separate service:</strong> it needs a standalone Azure AI Content Safety resource wired behind it (provisioned here).</li>
+</ul>
+<h2 id="5-semantic-caching-can-return-a-close-but-wrong-answer">5. Semantic caching can return a "close but wrong" answer</h2>
+<p>Caching matches on <strong>vector similarity, not exact text</strong>, so a loose <code>score-threshold</code> can hand back an answer that is close but not quite right — or stale, or unsafe for the current request. Two mitigations baked in: (a) start the threshold tight (<code>0.05</code> — lower is stricter) and loosen carefully; (b) the safety screen runs <strong>before</strong> the cache lookup, so the incoming prompt is always screened. Caching is also not free — it needs its own Redis infrastructure.</p>
+<h2 id="6-redisearch-must-be-enabled-at-cache-creation">6. RediSearch must be enabled at cache creation</h2>
+<p>Azure Managed Redis can only enable the <strong>RediSearch</strong> module when the cache is <strong>created</strong> — you cannot add it to an existing cache. <code>infra/modules/redis.bicep</code> sets it at creation; changing it later means recreating the cache.</p>
+<h2 id="7-mcp-governance-is-whole-server-not-per-tool">7. MCP governance is whole-server, not per-tool</h2>
+<p>Policies on an MCP server apply to <strong>every</strong> operation/tool the server exposes — you cannot yet scope a policy to one individual tool. Also: never read <code>context.Response.Body</code> in an MCP policy; it forces buffering and breaks the streamable-HTTP transport MCP needs.</p>
+<h2 id="8-a2a-is-json-rpc-only-request-side-governance-only">8. A2A is JSON-RPC only, request-side governance only</h2>
+<p>The A2A agent API supports <strong>JSON-RPC</strong> agents only, and does <strong>not</strong> support deserializing outgoing response bodies — so governance lives on the inbound (request) side. Audit comes from the auto-emitted OTel attributes <code>gen_ai.agent.id</code> / <code>gen_ai.agent.name</code>.</p>
+<h2 id="9-governing-claude-requires-a-v2-tier">9. Governing Claude requires a v2 tier</h2>
+<p>Anthropic Messages support for <code>llm-token-limit</code> / semantic cache, and the unified doorway's OpenAI⇄Anthropic translation, require an <strong>APIM v2 tier</strong>. This repo is OpenAI-only by design and runs on Developer; adding Claude is a tier upgrade + a backend add — see <a href="runbooks/add-claude.html">runbooks/add-claude.md</a>. It is not a rearchitecture, but it is not free either.</p>
+<h2 id="10-preview-surfaces-will-change">10. Preview surfaces will change</h2>
+<p>MCP, A2A, and the unified model API are <strong>preview</strong>. Their management APIs are still moving and lack stable ARM/Bicep types, which is why they're provisioned via <code>scripts/provision-preview.*</code> rather than Bicep (<a href="adr/0003-preview-via-scripts.html">ADR-0003</a>). Treat them as a direction, not a finished contract; expect to update the scripts as the surfaces stabilise.</p>
+<h2 id="11-data-masking-covers-headers-and-query-params-not-promptcompletion-bodies">11. Data masking covers headers and query params — not prompt/completion bodies</h2>
+<p>APIM diagnostic <strong>data masking can only Hide/Mask headers and URL query parameters</strong> — verified against the diagnostic schema across every API version. It <strong>cannot</strong> redact PII inside the LLM prompt or completion <strong>body</strong>. So the <code>dataMasking</code> flag does the thing it actually can: it Hides the <code>api-key</code>/<code>subscription-key</code>/<code>Authorization</code> secret-leak vector from telemetry (<code>infra/modules/llm-api.bicep</code>). Protecting body content is a <em>different</em> lever — the per-API "log LLM messages" toggle (<code>promptLogging</code>): leave message-body logging <strong>off</strong> for sensitive BUs (the <code>regulated</code> profile does), or run an ingestion-time Log Analytics transform (DCR) to redact before the data lands. Do not assume <code>dataMasking: true</code> scrubs prompts — it does not, and nothing in APIM does.</p>
+<h2 id="12-secops-auto-throttle-needs-an-actuator-you-wire">12. SecOps auto-throttle needs an actuator you wire</h2>
+<p>The budget alert (<code>modules/secops.bicep</code>) is fully deployed GA — detection, action group, the works. But Azure Monitor alerts <strong>notify</strong>; they don't mutate config. Closing the loop to <em>enforcement</em> (lower the TPM cap) is <code>scripts/throttle.*</code>, which you wire to the action group via an Automation runbook or Logic App (see <a href="runbooks/secops-loop.html">runbooks/secops-loop.md</a>). Out of the box you get the alert + email and a one-command throttle; the fully-automatic path is a documented wiring step, not a deployed Logic App (kept out of Bicep deliberately — a hand-rolled workflow JSON is brittle for a reference repo). Also: <strong>Defender for APIs</strong> bills per subscription and onboarding each APIM API to it is a second, recommendation-driven portal step after the plan is enabled.</p>
+<h2 id="13-workspaces-federation-need-a-v2-premium-tier">13. Workspaces (federation) need a v2 / Premium tier</h2>
+<p>The <code>workspaces</code> flag (Phase 4 federation) is supported on <strong>Basic v2 / Standard v2 /
+Premium / Premium v2 only</strong> — verified against the tier feature comparison. The seed
+defaults to <strong>Developer</strong>, which does <strong>not</strong> support workspaces, so deploying
+<code>workspaces: true</code> on Developer <strong>fails</strong>. Any profile that turns it on (<code>test</code>/<code>prod</code>/
+<code>regulated</code>) must set a v2/Premium SKU (<code>APIM_SKU=StandardV2</code> or <code>PremiumV2</code>). The global
+policy floor and <code>entraAuth</code> work on every tier; only the workspaces half carries this
+requirement. Also: a workspace collaborator needs <strong>both</strong> a workspace-scoped and a
+service-scoped role, and MCP/A2A preview surfaces aren't supported inside workspaces yet.
+See <a href="runbooks/federation.html">runbooks/federation.md</a>.</p>
+<h2 id="14-reliability-needs-premium-class-tiers-and-multi-region-multiplies-the-quota">14. Reliability needs Premium-class tiers, and multi-region multiplies the quota</h2>
+<p>The Phase 5 gateway-resilience flags carry tier and accounting consequences:
+- <strong><code>availabilityZones</code></strong> needs Premium / Premium v2; <strong><code>multiRegion</code></strong> needs <strong>Premium
+  (classic) only</strong>. The Developer seed supports neither — these flags <strong>fail</strong> on Developer,
+  so enabling them requires <code>APIM_SKU=Premium</code>/<code>PremiumV2</code>. (<code>modelFailover</code> works on any tier.)
+- <strong>Multi-region vs multi-provider is an either/or today:</strong> Premium classic gives multi-region
+  but not the v2-only unified doorway/Claude; v2 gives the doorway but not multi-region. A
+  current Azure limit — pick by priority (<a href="enterprise/target-architecture.html#3-tier-decision-the-load-bearing-choice">target-architecture §3</a>).
+- <strong>Token quota counts per region</strong> (see §1): turn on <code>multiRegion</code> and a 1M/month cap becomes
+  1M × regions. Do the per-region math.
+- <strong>Multi-region + network isolation</strong> needs a subnet + public IP per added region in the
+  <code>additionalLocations</code> objects — not auto-derived. With one OpenAI account the failover pool
+  has one member (the circuit breaker still protects it); active-active needs a second region's
+  backend. See <a href="runbooks/reliability.html">runbooks/reliability.md</a>.</p>
+<h2 id="15-multi-provider-is-preview-v2-only-and-needs-the-doorway-to-fail-over">15. Multi-provider is preview, v2-only, and needs the doorway to fail over</h2>
+<p>The <code>multiProvider</code> capability (unified doorway + Claude/Gemini governance) is <strong>preview and
+v2-only</strong>, so it ships as a guided script (<a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/scripts/provision-preview.sh">provision-preview</a>)
++ the <a href="runbooks/multi-provider.html">runbook</a>, not Bicep (<a href="adr/0009-multi-provider.html">ADR-0009</a>).
+Three things to know:
+- <strong>It excludes multi-region</strong> in one instance (v2 vs Premium classic — see §14 / §3). For both,
+  run separate instances behind one edge.
+- <strong>Cross-provider failover requires the doorway's format translation.</strong> You cannot drop Claude
+  into the Phase-5 OpenAI pool and expect failover — the wire formats differ. Same-provider
+  failover is the GA pool; cross-provider is the preview doorway.
+- <strong>The provider key lives in Key Vault</strong> (<code>useKeyVault</code>), referenced by a KV-reference named
+  value created post-deploy (the secret must exist before the reference, so it can't be pure
+  Bicep). Never put the key in a template.</p>
+<h2 id="16-cost-and-sla-reality">16. Cost and SLA reality</h2>
+<p>Deploying costs real money. <strong>Developer</strong> APIM ≈ $50/mo with <strong>no SLA</strong> and ~30–45 min provisioning. <strong>StandardV2</strong> ≈ several hundred $/mo. Add Azure Managed Redis and Content Safety on top. The repo is deploy-ready; deciding to deploy is a deliberate, cost-incurring action.</p>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>

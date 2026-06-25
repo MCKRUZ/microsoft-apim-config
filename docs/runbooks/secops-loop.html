@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Runbook — SecOps loop (Phase 3) · APIM Agentic Governance</title>
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<div class="topbar" role="navigation" aria-label="Site">
+  <a class="home" href="../../index.html">Home</a>
+  <a href="../../docs/enterprise/target-architecture.html">Architecture</a>
+  <a href="../../docs/enterprise/flag-status.html">Flags</a>
+  <details class="ref"><summary>Phases &#9662;</summary><div class="menu">
+    <a href="../../docs/runbooks/network-isolation.html">1 · Network isolation</a>
+    <a href="../../docs/runbooks/ci-cd-pipeline.html">2 · CI/CD guardrails</a>
+    <a href="../../docs/runbooks/secops-loop.html">3 · SecOps loop</a>
+    <a href="../../docs/runbooks/federation.html">4 · Federation</a>
+    <a href="../../docs/runbooks/reliability.html">5 · Reliability</a>
+    <a href="../../docs/runbooks/multi-provider.html">6 · Multi-provider</a>
+  </div></details>
+  <details class="ref"><summary>Reference &#9662;</summary><div class="menu">
+    <a href="../../docs/index.html">All docs</a>
+    <a href="../../docs/caveats.html">Caveats</a>
+    <a href="../../docs/enterprise/capability-toggles.html">Capability toggles</a>
+    <a href="../../docs/enterprise/compliance-mapping.html">Compliance mapping</a>
+    <a href="../../docs/adr/index.html">ADRs</a>
+    <a href="../../docs/runbooks/deploy.html">Deploy</a>
+  </div></details>
+  <a class="sp" href="https://github.com/MCKRUZ/microsoft-apim-config">GitHub ↗</a>
+</div>
+<header class="dochead"><div class="wrap">
+  <p class="crumb"><a href="../../index.html">Home</a> / <a href="../index.html">docs</a> / <a href="index.html">runbooks</a></p>
+  <h1>Runbook — SecOps loop (Phase 3)</h1>
+  <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/secops-loop.md">edit this page on GitHub ↗</a></p>
+</div></header>
+<main class="content"><div class="wrap">
+<p>Telemetry is not governance; the closed loop is. This phase turns the token/prompt
+logs the gateway already emits into <strong>detection → alert → enforcement</strong>. Flags:
+<code>secOpsLoop</code> (the loop) and <code>dataMasking</code> (keep secrets out of the logs).</p>
+<h2 id="what-it-deploys-secopsloop-on">What it deploys (<code>secOpsLoop</code> on)</h2>
+<table>
+<thead>
+<tr>
+<th>Resource</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Diagnostic setting on APIM → Log Analytics</td>
+<td>Streams <code>GatewayLogs</code> + <code>GatewayLlmLogs</code>. The latter populates <code>ApiManagementGatewayLlmLog</code> (TotalTokens/PromptTokens/…) — the grounded source the budget alert queries.</td>
+</tr>
+<tr>
+<td>Microsoft Sentinel onboarding</td>
+<td>SIEM correlation on the workspace.</td>
+</tr>
+<tr>
+<td>Action group <code>ag-aigov-secops</code></td>
+<td>Email receiver; the webhook receiver is where you wire the auto-throttle actuator.</td>
+</tr>
+<tr>
+<td>Log alert <code>aigov-budget-threshold</code></td>
+<td><code>sum(TotalTokens)</code> over 1h &gt; <code>budgetTokensPerHour</code> → the auto-throttle trigger.</td>
+</tr>
+<tr>
+<td>Log alert <code>aigov-injection-spike</code></td>
+<td>Count of 403 (content-safety blocks) on the governed API over 15m &gt; <code>injection403Threshold</code> → likely attack wave.</td>
+</tr>
+<tr>
+<td>Defender for APIs (subscription plan)</td>
+<td>Threat protection on APIM. Deployed at sub scope in <code>main.bicep</code>.</td>
+</tr>
+</tbody>
+</table>
+<p><code>dataMasking</code> (independent flag) Hides <code>api-key</code>/<code>subscription-key</code>/<code>Authorization</code> from
+the App Insights diagnostic (<code>modules/llm-api.bicep</code>).</p>
+<h2 id="the-closed-loop-end-to-end">The closed loop, end to end</h2>
+<pre><code>agent → APIM → model
+          │ TotalTokens, 403s → Log Analytics (GatewayLlmLogs / GatewayLogs)
+          ▼
+   budget-threshold alert ──► action group ──► [actuator] ──► az apim nv update
+   (sum tokens &gt; limit)         (email +          throttle.*    tokens-per-minute ↓
+                                 webhook)                        (effective next request)
+</code></pre>
+<p>The alert detects; <strong><code>scripts/throttle.*</code> enforces</strong> by lowering the <code>tokens-per-minute</code>
+named value the governance policy reads — no redeploy, takes effect on the next requests.</p>
+<h3 id="wiring-the-actuator-pick-one">Wiring the actuator (pick one)</h3>
+<ol>
+<li><strong>Manual (simplest).</strong> On the budget email, run:
+   <code>bash
+   scripts/throttle.sh 100        # clamp to 100 TPM
+   scripts/throttle.sh restore 1000</code></li>
+<li><strong>Automation runbook (recommended for prod).</strong> Create an Azure Automation account
+   with a managed identity granted <code>API Management Service Contributor</code> on the APIM RG.
+   Put the body of <code>throttle.sh</code>/<code>throttle.ps1</code> in a runbook, add a <strong>webhook</strong> receiver
+   to the action group pointing at the runbook's webhook. Now a budget breach throttles
+   automatically.</li>
+<li><strong>Logic App.</strong> Same idea with a Consumption Logic App (HTTP trigger from the action
+   group → <code>az</code>/ARM call). Not deployed by this repo by design — see <a href="../caveats.html#12-secops-auto-throttle-needs-an-actuator-you-wire">caveats §12</a>.</li>
+</ol>
+<blockquote>
+<p>Throttling diverges live config from the repo; <code>scripts/drift-detect.*</code> will flag it
+until you redeploy or adopt the new cap. That's intended — the drift signal is your
+reminder to reconcile after an incident.</p>
+</blockquote>
+<h2 id="tuning-the-thresholds">Tuning the thresholds</h2>
+<pre><code class="language-bash">az deployment sub create -l eastus2 -f infra/main.bicep \
+  -p infra/main.parameters.json -p profile=prod \
+  -p budgetTokensPerHour=20000000 -p injection403Threshold=50
+</code></pre>
+<p>Set <code>budgetTokensPerHour</code> to ~1.5× your expected peak hourly tokens so normal load
+doesn't page anyone. Set <code>injection403Threshold</code> above your benign 403 floor (failed
+auth, etc.) so only a genuine spike fires.</p>
+<h2 id="data-protection-what-datamasking-does-and-doesnt">Data protection: what <code>dataMasking</code> does and doesn't</h2>
+<ul>
+<li><strong>Does:</strong> Hides <code>api-key</code> + <code>subscription-key</code> + <code>Authorization</code> from telemetry — the
+  secret-leak vector. Always turn this on when logging is on.</li>
+<li><strong>Does NOT:</strong> redact PII inside prompt/completion <strong>bodies</strong> — APIM masking is
+  headers/query only (<a href="../caveats.html#11-data-masking-covers-headers-and-query-params--not-promptcompletion-bodies">caveats §11</a>).</li>
+<li><strong>Body PII control = <code>promptLogging</code>.</strong> Leave LLM message-body logging <strong>off</strong> for
+  sensitive BUs (the <code>regulated</code> profile defaults it off, keeping token <em>metadata</em> for
+  cost/audit while dropping the message contents). For audit-with-redaction, add an
+  ingestion-time DCR transform on the <code>ApiManagementGatewayLlmLog</code> table.</li>
+</ul>
+<h2 id="verify-after-deploy">Verify after deploy</h2>
+<ul>
+<li>Portal → APIM → <strong>Alerts</strong> → confirm both rules present and enabled.</li>
+<li>Portal → <strong>Microsoft Sentinel</strong> → the workspace is listed (onboarded).</li>
+<li>Generate load, then in Log Analytics:
+  <code>kusto
+  ApiManagementGatewayLlmLog | summarize sum(TotalTokens) by bin(TimeGenerated, 1h)
+  ApiManagementGatewayLogs   | where ResponseCode == 403 | summarize count() by bin(TimeGenerated, 15m)</code></li>
+<li>Trip the budget alert in staging (low <code>budgetTokensPerHour</code>), confirm the email, then
+  confirm <code>throttle.sh</code> lowers the cap and the next over-cap call returns 429.</li>
+</ul>
+<h2 id="validate-before-production">⚠ Validate before production</h2>
+<ul>
+<li><strong>Alert KQL tables/columns</strong> (<code>ApiManagementGatewayLlmLog.TotalTokens</code>,
+  <code>ApiManagementGatewayLogs.ResponseCode/ApiId</code>) are verified against the Azure Monitor
+  table reference, but the LLM logging schema is evolving — confirm against your
+  workspace before trusting the thresholds.</li>
+<li><strong>Defender for APIs</strong> is a paid plan billed per subscription; enabling it via the
+  <code>secOpsLoop</code> flag turns it on subscription-wide. Onboard individual APIM APIs from the
+  Defender for Cloud <strong>Recommendations</strong> after the plan is on (≈40–50 min to appear).</li>
+</ul>
+</div></main>
+<footer class="foot"><div class="wrap">
+  MCKRUZ · APIM Agentic Governance Golden Copy ·
+  <a href="../../index.html">Home</a> ·
+  <a href="https://github.com/MCKRUZ/microsoft-apim-config">Source on GitHub ↗</a>
+</div></footer>
+
+</body>
+</html>
