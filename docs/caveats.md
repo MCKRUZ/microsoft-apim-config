@@ -56,5 +56,20 @@ requirement. Also: a workspace collaborator needs **both** a workspace-scoped an
 service-scoped role, and MCP/A2A preview surfaces aren't supported inside workspaces yet.
 See [runbooks/federation.md](runbooks/federation.md).
 
-## 14. Cost and SLA reality
+## 14. Reliability needs Premium-class tiers, and multi-region multiplies the quota
+The Phase 5 gateway-resilience flags carry tier and accounting consequences:
+- **`availabilityZones`** needs Premium / Premium v2; **`multiRegion`** needs **Premium
+  (classic) only**. The Developer seed supports neither — these flags **fail** on Developer,
+  so enabling them requires `APIM_SKU=Premium`/`PremiumV2`. (`modelFailover` works on any tier.)
+- **Multi-region vs multi-provider is an either/or today:** Premium classic gives multi-region
+  but not the v2-only unified doorway/Claude; v2 gives the doorway but not multi-region. A
+  current Azure limit — pick by priority ([target-architecture §3](enterprise/target-architecture.md#3-tier-decision-the-load-bearing-choice)).
+- **Token quota counts per region** (see §1): turn on `multiRegion` and a 1M/month cap becomes
+  1M × regions. Do the per-region math.
+- **Multi-region + network isolation** needs a subnet + public IP per added region in the
+  `additionalLocations` objects — not auto-derived. With one OpenAI account the failover pool
+  has one member (the circuit breaker still protects it); active-active needs a second region's
+  backend. See [runbooks/reliability.md](runbooks/reliability.md).
+
+## 15. Cost and SLA reality
 Deploying costs real money. **Developer** APIM ≈ $50/mo with **no SLA** and ~30–45 min provisioning. **StandardV2** ≈ several hundred $/mo. Add Azure Managed Redis and Content Safety on top. The repo is deploy-ready; deciding to deploy is a deliberate, cost-incurring action.

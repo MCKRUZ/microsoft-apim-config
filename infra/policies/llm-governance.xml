@@ -45,6 +45,12 @@
              Azure OpenAI endpoint; this just supplies the Authorization header. -->
         <authentication-managed-identity resource="https://cognitiveservices.azure.com" />
 
+        <!-- Model failover (Phase 5): when the modelFailover flag is on, route the chat
+             call through the circuit-breaker-protected load-balanced pool 'openai-pool'
+             instead of the API serviceUrl. Replaced at deploy time by llm-api.bicep —
+             empty string when the flag is off, so the API uses its serviceUrl as before. -->
+        <!-- FAILOVER_BACKEND -->
+
         <!-- (1) Spend cap: per-minute rate limit + monthly token quota, keyed by the
                  subscription = team/app identity. estimate-prompt-tokens="true" turns away
                  oversized prompts before they bill the backend. -->

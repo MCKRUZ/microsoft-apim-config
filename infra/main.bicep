@@ -27,14 +27,28 @@ param apimPublisherEmail string
 @description('Publisher organisation name for APIM.')
 param apimPublisherName string = 'AI Governance Golden Copy'
 
-@description('APIM SKU. Developer = cheapest full-feature (no SLA, default). StandardV2 = production target. Consumption is unsupported (no token-limit governance).')
+@description('APIM SKU. Developer = cheapest full-feature (no SLA, default). StandardV2 = production target. Premium (classic) is required for multi-region (Phase 5); workspaces (Phase 4) require a v2/Premium tier. Consumption is unsupported (no token-limit governance).')
 @allowed([
   'Developer'
   'BasicV2'
   'StandardV2'
+  'Premium'
   'PremiumV2'
 ])
 param apimSkuName string = 'Developer'
+
+@description('Number of APIM scale units. For availability zones, set to a multiple of the zone count (e.g. 3 for 3 zones).')
+param apimCapacity int = 1
+
+@description('Availability zones for the primary region when the availabilityZones flag is on (Premium / Premium v2).')
+param apimZones array = [
+  '1'
+  '2'
+  '3'
+]
+
+@description('Additional regional gateways when the multiRegion flag is on (Premium CLASSIC only). e.g. [ { location: "westus", sku: { name: "Premium", capacity: 1 }, zones: [ "1", "2", "3" ] } ].')
+param additionalLocations array = []
 
 @description('Per-minute token rate limit (TPM) applied per team/subscription.')
 param tokensPerMinute int = 1000
@@ -125,6 +139,9 @@ var secOps = bool(flags.secOpsLoop)
 var masking = bool(flags.dataMasking)
 var federationOn = bool(flags.workspaces)
 var entra = bool(flags.entraAuth)
+var multiRegion = bool(flags.multiRegion)
+var availabilityZones = bool(flags.availabilityZones)
+var failover = bool(flags.modelFailover)
 
 // Deterministic, globally-unique-ish suffix for resource names.
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
@@ -208,6 +225,9 @@ module apim 'modules/apim.bicep' = {
     publisherEmail: apimPublisherEmail
     publisherName: apimPublisherName
     skuName: apimSkuName
+    skuCapacity: apimCapacity
+    zones: availabilityZones ? apimZones : []
+    additionalLocations: multiRegion ? additionalLocations : []
     appInsightsId: monitoring.outputs.appInsightsId
     appInsightsInstrumentationKey: monitoring.outputs.appInsightsInstrumentationKey
     redisDatabaseId: redis.outputs.redisDatabaseId
@@ -301,6 +321,7 @@ module llmApi 'modules/llm-api.bicep' = {
     contentSafetyEndpoint: contentSafety.outputs.contentSafetyEndpoint
     apimLoggerId: apim.outputs.apimLoggerId
     dataMasking: masking
+    modelFailover: failover
   }
   // Named values must exist before the policy that references them is validated.
   dependsOn: [

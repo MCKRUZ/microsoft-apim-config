@@ -25,17 +25,24 @@ param publisherEmail string
 @description('Publisher organisation name.')
 param publisherName string
 
-@description('APIM SKU. Developer = cheapest full-feature (no SLA). StandardV2 = production. Consumption is unsupported (no token-limit governance).')
+@description('APIM SKU. Developer = cheapest full-feature (no SLA). StandardV2 = production. Premium (classic) is the only tier supporting multi-region (Phase 5). Consumption is unsupported (no token-limit governance).')
 @allowed([
   'Developer'
   'BasicV2'
   'StandardV2'
+  'Premium'
   'PremiumV2'
 ])
 param skuName string = 'Developer'
 
-@description('Number of scale units. Developer is always 1.')
+@description('Number of scale units. Developer is always 1. For availability zones, capacity must distribute evenly across the zones (e.g. 3 units for 3 zones).')
 param skuCapacity int = 1
+
+@description('Availability zones for the primary location (Phase 5, Premium / Premium v2). Empty = none. e.g. [ "1", "2", "3" ].')
+param zones array = []
+
+@description('Additional regional gateways for multi-region active-active (Phase 5, Premium CLASSIC only). Each: { location, sku: { name, capacity }, zones, ... }. Empty = single region.')
+param additionalLocations array = []
 
 @description('Application Insights resource ID (for the diagnostic link).')
 param appInsightsId string
@@ -75,6 +82,9 @@ resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
     name: skuName
     capacity: skuCapacity
   }
+  // Zone redundancy for the primary location (Premium / Premium v2). Top-level
+  // property, alongside sku/identity — not under properties.
+  zones: empty(zones) ? null : zones
   identity: {
     type: 'SystemAssigned' // the gateway's identity used to call OpenAI + Content Safety
   }
@@ -85,6 +95,9 @@ resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
     virtualNetworkConfiguration: virtualNetworkType == 'None' ? null : {
       subnetResourceId: apimSubnetId
     }
+    // Multi-region active-active gateways (Premium classic only). Each added region
+    // can carry its own zones; with VNet injection each also needs its own subnet + public IP.
+    additionalLocations: empty(additionalLocations) ? null : additionalLocations
   }
 }
 

@@ -42,6 +42,9 @@ param openAiApiVersion string = '2024-10-21'
 @description('Mask secret-bearing headers/query params in the App Insights diagnostic (Phase 3 dataMasking flag). NOTE: APIM data masking covers headers + query params only — it cannot mask prompt/completion BODY content. Body PII is governed by whether LLM message logging is enabled (promptLogging). See docs/caveats.md.')
 param dataMasking bool = false
 
+@description('Route chat through a circuit-breaker-protected load-balanced backend pool (Phase 5 modelFailover flag). With one OpenAI account the pool has one member; the circuit breaker still protects it and the pool is ready for a second region.')
+param modelFailover bool = false
+
 resource apim 'Microsoft.ApiManagement/service@2024-05-01' existing = {
   name: apimName
 }
@@ -69,6 +72,64 @@ resource contentSafetyBackend 'Microsoft.ApiManagement/service/backends@2024-05-
     protocol: 'http'
     url: contentSafetyEndpoint
     description: 'Azure AI Content Safety (Prompt Shields) backend used by llm-content-safety. MI auth set post-deploy.'
+  }
+}
+
+// --- Model-failover backends (Phase 5) --------------------------------------
+// A circuit-breaker-protected chat backend + a load-balanced pool. The breaker
+// trips the backend on a burst of 429s/5xx (honouring Retry-After) so a throttling
+// or failing model returns fast instead of piling up, then auto-recovers. The pool
+// is the failover container — add a second region's backend as a member for
+// active-active. Only created when modelFailover is on; the governed policy is then
+// routed through the pool via the FAILOVER_BACKEND injection below.
+resource chatBackend 'Microsoft.ApiManagement/service/backends@2024-05-01' = if (modelFailover) {
+  parent: apim
+  name: 'chat-backend'
+  properties: {
+    protocol: 'http'
+    url: '${openAiEndpoint}openai'
+    description: 'Azure OpenAI chat backend, circuit-breaker protected. Member of openai-pool.'
+    circuitBreaker: {
+      rules: [
+        {
+          name: 'throttle-and-5xx'
+          failureCondition: {
+            count: 3
+            interval: 'PT5M'
+            statusCodeRanges: [
+              {
+                min: 429
+                max: 429
+              }
+              {
+                min: 500
+                max: 599
+              }
+            ]
+          }
+          tripDuration: 'PT1M'
+          acceptRetryAfter: true // honour Azure OpenAI's Retry-After on 429 throttling
+        }
+      ]
+    }
+  }
+}
+
+resource openAiPool 'Microsoft.ApiManagement/service/backends@2024-05-01' = if (modelFailover) {
+  parent: apim
+  name: 'openai-pool'
+  properties: {
+    description: 'Load-balanced pool of Azure OpenAI backends. Add a second region as a member for active-active failover.'
+    type: 'Pool'
+    pool: {
+      services: [
+        {
+          id: chatBackend.id
+          priority: 1
+          weight: 100
+        }
+      ]
+    }
   }
 }
 
@@ -138,11 +199,19 @@ resource openAiApiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-
   name: 'policy'
   properties: {
     format: 'rawxml'
-    value: loadTextContent('../policies/llm-governance.xml')
+    // Inject the pool route only when modelFailover is on; otherwise the marker is
+    // removed and the API falls back to its serviceUrl (single-backend behaviour).
+    value: replace(
+      loadTextContent('../policies/llm-governance.xml'),
+      '<!-- FAILOVER_BACKEND -->',
+      modelFailover ? '<set-backend-service backend-id="openai-pool" />' : ''
+    )
   }
   dependsOn: [
     embeddingsBackend
     contentSafetyBackend
+    chatBackend
+    openAiPool
   ]
 }
 
