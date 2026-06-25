@@ -12,7 +12,7 @@ Every governance capability as a feature flag: its parameter, default per profil
 | `entraAuth` | Entra JWT validation at the global (All APIs) scope | ○ | ● | ● | ● | any | GA | `fragments/entra-jwt.xml` spliced into the global policy by `governance-global.bicep` |
 | `multiRegion` | Active-active regional gateways + failover | ○ | ○ | ● | ● | **Premium (classic)** only | GA | `additionalLocations` on `apim.bicep` (fails on Developer) |
 | `availabilityZones` | Zone-redundant units | ○ | ○ | ● | ● | Premium / Premium v2 | GA | `zones` on `apim.bicep` (capacity must match zone count) |
-| `useKeyVault` | Secrets via Key Vault references | ○ | ● | ● | ● | any | GA | `modules/keyvault.bicep` + KV-ref named values |
+| `useKeyVault` | Secrets via Key Vault references (home for non-Azure provider keys) | ○ | ● | ● | ● | any | GA | `modules/keyvault.bicep` (vault + APIM MI → Key Vault Secrets User); KV-ref named values added post-deploy |
 | `pipelineGuardrails` | CI/CD what-if gate, drift detection, policy tests | ○ | ● | ● | ● | n/a (CI) | GA | pipeline + scheduled drift job |
 | `secOpsLoop` | Sentinel, Defender for APIs, budget→auto-throttle, injection-spike alerts | ○ | ○ | ● | ● | any | GA | `modules/secops.bicep` (diag→LAW, Sentinel, action group, 2 log alerts) + `Microsoft.Security/pricings` (sub scope) + `scripts/throttle.*` actuator |
 | `selfHostedGateway` | Hybrid / on-prem / multi-cloud gateway | ○ | ○ | ○ | ○ | Developer / Premium | GA | self-hosted gateway resource |
@@ -33,7 +33,7 @@ Every governance capability as a feature flag: its parameter, default per profil
 | `dataMasking` | Hide secret headers/query in logs (NOT body — see caveats §11) | ○ | ● | ● | ● | all | GA | diagnostic `frontend`/`backend` data-masking in `llm-api.bicep` |
 | `mcpTools` | Govern agent→tool (MCP) | ○ | ○ | ● | ● | Dev / v2 / Premium | **Preview** | `provision-preview` + `mcp-governance.xml` |
 | `a2aAgents` | Govern agent→agent (A2A) | ○ | ○ | ● | ● | Dev / v2 / Premium | **Preview** | `provision-preview` + `a2a-governance.xml` |
-| `multiProvider` | Unified doorway / Claude / Gemini | ○ | ○ | ○ | ○ | **v2 tiers** | **Preview** | unified model API (v2 or sidecar) |
+| `multiProvider` | Unified doorway / Claude / Gemini | ○ | ○ | ○ | ○ | **v2 tiers** | **Preview** | `provision-preview.*` guided flow (doorway + Anthropic backend + KV-ref key); informational at Bicep layer via `MULTI_PROVIDER_INTENDED` |
 | `modelFailover` | Load-balanced backend pool + circuit breaker | ○ | ● | ● | ● | all | GA | `chat-backend` (circuitBreaker) + `openai-pool` (type Pool) in `llm-api.bicep`, routed via `set-backend-service` |
 
 \* In `regulated`, semantic cache and prompt-body logging default **off**: cache can surface a close-but-wrong answer, and raw prompt logging is a data-protection liability. Turn on deliberately with masking + tight `score-threshold`.

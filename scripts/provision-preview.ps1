@@ -39,13 +39,41 @@ Write-Say "Governs agent-to-agent hand-offs (JSON-RPC). Emits OTel gen_ai.agent.
 
 Write-Hdr "PREVIEW: create the unified model API (one doorway)"
 Write-Say "Single /llm/v1/chat/completions endpoint; same governance for every backend."
-Write-Say "OpenAI-only here. Adding Claude = backend-add (Anthropic Messages) + StandardV2 tier."
 @"
   Portal: API Management ($($envv['APIM_NAME'])) -> APIs -> Models -> + Add -> 'Unified model API'
     -> API path: /llm/v1
     -> Add model: name 'gpt-4o', format 'OpenAI Chat Completions', URL = your AOAI chat deployment,
        Auth = Managed identity (system-assigned)
     -> reuse the same token-limit / content-safety policies
+  Docs: https://learn.microsoft.com/azure/api-management/unified-model-api
+"@ | Write-Host
+
+Write-Hdr "PREVIEW: multi-provider — add Claude (Anthropic) [multiProvider flag]"
+if ($envv['MULTI_PROVIDER_INTENDED'] -eq 'true') {
+  Write-Say "multiProvider is ON for this environment — follow the steps below."
+} else {
+  Write-Say "multiProvider is OFF (informational). These are the steps when you turn it on."
+}
+Write-Say "REQUIRES a v2 tier (Anthropic governance + OpenAI<->Anthropic translation are v2-only)."
+Write-Say "NOTE: a v2 instance has NO multi-region — multiProvider and multiRegion are exclusive in"
+Write-Say "one instance (target-architecture.md S3). Use a separate v2 instance or self-hosted sidecar."
+$kv = if ($envv['KEY_VAULT_NAME']) { $envv['KEY_VAULT_NAME'] } else { '<key-vault>' }
+@"
+  1. Store the Anthropic key in Key Vault (NEVER in a template or named value plaintext):
+       az keyvault secret set --vault-name $kv --name anthropic-api-key --value <ANTHROPIC_KEY>
+  2. Create a Key Vault REFERENCE named value (APIM MI already has Key Vault Secrets User):
+       Portal: $($envv['APIM_NAME']) -> Named values -> + Add -> Type 'Key vault'
+         -> name 'anthropic-api-key' -> select secret '$kv/anthropic-api-key'
+  3. Add the Anthropic backend:
+       Portal: $($envv['APIM_NAME']) -> Backends -> + Add
+         -> URL https://api.anthropic.com -> credentials: header 'x-api-key' = {{anthropic-api-key}}
+  4. Add Claude to the unified model API:
+       APIs -> Models -> (your unified API) -> + Add model
+         -> name 'claude', format 'Anthropic Messages', backend = the Anthropic backend
+         -> reuse the SAME token-limit / content-safety policies (governance is provider-agnostic)
+  Why the doorway: clients keep calling /llm/v1/chat/completions; APIM translates
+  OpenAI <-> Anthropic. Raw cross-provider failover does NOT work without this
+  translation (the request/response formats differ).
   Docs: https://learn.microsoft.com/azure/api-management/unified-model-api
 "@ | Write-Host
 

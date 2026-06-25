@@ -71,5 +71,19 @@ The Phase 5 gateway-resilience flags carry tier and accounting consequences:
   has one member (the circuit breaker still protects it); active-active needs a second region's
   backend. See [runbooks/reliability.md](runbooks/reliability.md).
 
-## 15. Cost and SLA reality
+## 15. Multi-provider is preview, v2-only, and needs the doorway to fail over
+The `multiProvider` capability (unified doorway + Claude/Gemini governance) is **preview and
+v2-only**, so it ships as a guided script ([provision-preview](../scripts/provision-preview.sh))
++ the [runbook](runbooks/multi-provider.md), not Bicep ([ADR-0009](adr/0009-multi-provider.md)).
+Three things to know:
+- **It excludes multi-region** in one instance (v2 vs Premium classic — see §14 / §3). For both,
+  run separate instances behind one edge.
+- **Cross-provider failover requires the doorway's format translation.** You cannot drop Claude
+  into the Phase-5 OpenAI pool and expect failover — the wire formats differ. Same-provider
+  failover is the GA pool; cross-provider is the preview doorway.
+- **The provider key lives in Key Vault** (`useKeyVault`), referenced by a KV-reference named
+  value created post-deploy (the secret must exist before the reference, so it can't be pure
+  Bicep). Never put the key in a template.
+
+## 16. Cost and SLA reality
 Deploying costs real money. **Developer** APIM ≈ $50/mo with **no SLA** and ~30–45 min provisioning. **StandardV2** ≈ several hundred $/mo. Add Azure Managed Redis and Content Safety on top. The repo is deploy-ready; deciding to deploy is a deliberate, cost-incurring action.

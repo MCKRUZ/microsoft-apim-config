@@ -142,6 +142,7 @@ var entra = bool(flags.entraAuth)
 var multiRegion = bool(flags.multiRegion)
 var availabilityZones = bool(flags.availabilityZones)
 var failover = bool(flags.modelFailover)
+var keyVaultOn = bool(flags.useKeyVault)
 
 // Deterministic, globally-unique-ish suffix for resource names.
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
@@ -154,7 +155,11 @@ var names = {
   contentSafety: 'cs-${resourceToken}'
   logAnalytics: 'log-${resourceToken}'
   appInsights: 'appi-${resourceToken}'
+  keyVault: 'kv-${resourceToken}'
 }
+
+@description('Enable Key Vault purge protection (irreversible). Set true for prod/regulated.')
+param keyVaultPurgeProtection bool = false
 
 resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   name: rgName
@@ -345,6 +350,21 @@ module secopsModule 'modules/secops.bicep' = if (secOps) {
   }
 }
 
+// Phase 6 — Key Vault: the secret home for non-Azure provider keys (multi-provider).
+// Wires the long-declared useKeyVault flag. APIM MI gets Key Vault Secrets User so it
+// can read KV-reference named values. Secrets are added out-of-band, never in Bicep.
+module keyVault 'modules/keyvault.bicep' = if (keyVaultOn) {
+  scope: rg
+  name: 'keyvault'
+  params: {
+    location: location
+    keyVaultName: names.keyVault
+    apimPrincipalId: apim.outputs.apimPrincipalId
+    enablePurgeProtection: keyVaultPurgeProtection
+    tags: tags
+  }
+}
+
 // Microsoft Defender for APIs — SUBSCRIPTION-scope plan (threat protection on APIM).
 // Standard tier bills per subscription on API traffic; gated on the flag. Onboarding
 // individual APIM APIs to Defender is a second, recommendation-driven step (portal).
@@ -409,3 +429,9 @@ output CONTENT_SAFETY_NAME string = contentSafety.outputs.contentSafetyName
 
 @description('Azure OpenAI account name.')
 output OPENAI_NAME string = openai.outputs.openAiName
+
+@description('Key Vault name (empty unless useKeyVault is on). Stores non-Azure provider keys; provision-preview adds the Anthropic key + KV-reference named value here.')
+output KEY_VAULT_NAME string = keyVaultOn ? keyVault!.outputs.keyVaultName : ''
+
+@description('Whether multi-provider (preview, v2-only) is intended for this environment. provision-preview reads this to print the Claude/unified-doorway guidance.')
+output MULTI_PROVIDER_INTENDED bool = bool(flags.multiProvider)

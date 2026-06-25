@@ -175,7 +175,7 @@ Seed (today) → enterprise target, in dependency order. Each step is independen
 | 3 (done) | **SecOps loop** (Sentinel, Defender, budget→throttle, masking) | `secOpsLoop`, `dataMasking` | enforcement, not observation; audit-ready |
 | 4 (done) | **Federation** (workspaces per BU, scoped RBAC, `<base/>` Azure Policy) | `workspaces`, `entraAuth` | scales to dozens of BUs without losing central control |
 | 5 (done) | **Reliability** (multi-region/AZ, failover pools, capacity/PTU) | `multiRegion`, `availabilityZones`, `modelFailover` | survives a region; tier decision (§3) lands here |
-| 6 | **Multi-provider** (unified doorway / Claude, v2 or sidecar) | `multiProvider` | provider independence; preview, isolated |
+| 6 (done) | **Multi-provider** (unified doorway / Claude, v2 or sidecar) | `multiProvider`, `useKeyVault` | provider independence; preview, isolated |
 
 Compliance obligations satisfied at each phase: [compliance-mapping.md](compliance-mapping.md).
 
