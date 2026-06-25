@@ -26,8 +26,8 @@ Every governance capability as a feature flag: its parameter, default per profil
 | `preflightReject` | Reject oversize prompts before billing | ● | ● | ● | ● | not Consumption | GA | `estimate-prompt-tokens="true"` |
 | `costAttribution` | Per-team/agent token metrics | ● | ● | ● | ● | all | GA | `llm-emit-token-metric` |
 | `semanticCache` | Reuse semantically-similar completions | ● | ● | ● | ○* | all (needs Redis) | GA | `llm-semantic-cache-*` + `redis.bicep` |
-| `contentSafetyPrompt` | Jailbreak + indirect-injection screen (request) | ○ | ● | ● | ● | all | GA | `llm-content-safety shield-prompt` |
-| `contentSafetyResponse` | Screen completions on the way out | ○ | ● | ● | ● | all | GA | `enforce-on-completions="true"` |
+| `contentSafetyPrompt` | Jailbreak + indirect-injection screen (request) | ● | ● | ● | ● | all | GA | composed `llm-content-safety shield-prompt` |
+| `contentSafetyResponse` | Screen completions on the way out | ● | ● | ● | ● | all | GA | composed `enforce-on-completions` |
 | `customBlocklists` | Org-specific blocked terms | ○ | ○ | ● | ● | all | GA | `<blocklists>` in policy |
 | `promptLogging` | Log prompts/completions for audit | ● | ● | ● | ○* | all | GA | API diagnostic |
 | `dataMasking` | Hide secret headers/query in logs (NOT body — see caveats §11) | ○ | ● | ● | ● | all | GA | diagnostic `frontend`/`backend` data-masking in `llm-api.bicep` |
@@ -37,6 +37,12 @@ Every governance capability as a feature flag: its parameter, default per profil
 | `modelFailover` | Load-balanced backend pool + circuit breaker | ○ | ● | ● | ● | all | GA | `chat-backend` (circuitBreaker) + `openai-pool` (type Pool) in `llm-api.bicep`, routed via `set-backend-service` |
 
 \* In `regulated`, semantic cache and prompt-body logging default **off**: cache can surface a close-but-wrong answer, and raw prompt logging is a data-protection liability. Turn on deliberately with masking + tight `score-threshold`.
+
+> The seven GA control flags above are **composed into the policy** at deploy time
+> (`llm-api.bicep` splices each element into [`llm-governance.xml`](../../infra/policies/llm-governance.xml)
+> only when its flag is on). `customBlocklists` and `promptLogging` are *documented controls*
+> (external config), and `edgeWaf`/`selfHostedGateway` are *declared-future*. The full per-flag
+> wiring audit is in [flag-status.md](flag-status.md).
 
 ## Notes on dependencies
 - `multiRegion` and `multiProvider` are **mutually exclusive in one instance today** (Premium classic vs v2 — see [target-architecture §3](target-architecture.md#3-tier-decision-the-load-bearing-choice)). The flag set validates this and fails the build if both are `true` on one instance.

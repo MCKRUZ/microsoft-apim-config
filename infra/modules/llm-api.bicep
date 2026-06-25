@@ -45,6 +45,29 @@ param dataMasking bool = false
 @description('Route chat through a circuit-breaker-protected load-balanced backend pool (Phase 5 modelFailover flag). With one OpenAI account the pool has one member; the circuit breaker still protects it and the pool is ready for a second region.')
 param modelFailover bool = false
 
+// --- GA control toggles (compose llm-governance.xml). All default ON so the
+//     composed policy reproduces the always-on seed. ---------------------------
+@description('Per-minute TPM rate limit (llm-token-limit tokens-per-minute).')
+param tokenRateLimit bool = true
+
+@description('Monthly token quota (llm-token-limit token-quota).')
+param tokenQuota bool = true
+
+@description('Reject oversize prompts pre-flight (estimate-prompt-tokens).')
+param preflightReject bool = true
+
+@description('Emit per-team token metrics (llm-emit-token-metric).')
+param costAttribution bool = true
+
+@description('Screen requests with Prompt Shields (llm-content-safety shield-prompt).')
+param contentSafetyPrompt bool = true
+
+@description('Screen completions on the way out (enforce-on-completions).')
+param contentSafetyResponse bool = true
+
+@description('Semantic cache lookup + store (llm-semantic-cache-*).')
+param semanticCache bool = true
+
 resource apim 'Microsoft.ApiManagement/service@2024-05-01' existing = {
   name: apimName
 }
@@ -193,19 +216,34 @@ resource chatCompletionsOperation 'Microsoft.ApiManagement/service/apis/operatio
   }
 }
 
-// Attach the four-control governance policy at the API scope.
+// --- Compose the governance policy from the control flags --------------------
+// Each block is spliced into its marker in llm-governance.xml only when its flag
+// is on; empty string otherwise (no dead policy). All flags default on, so the
+// composed policy reproduces the always-on seed byte-for-byte.
+var failoverBlock = modelFailover ? '<set-backend-service backend-id="openai-pool" />' : ''
+
+var rateAttr = tokenRateLimit ? ' tokens-per-minute="{{tokens-per-minute}}"' : ''
+var quotaAttr = tokenQuota ? ' token-quota="{{token-quota}}" token-quota-period="{{token-quota-period}}"' : ''
+var estimateVal = preflightReject ? 'true' : 'false'
+var tokenLimitBlock = (tokenRateLimit || tokenQuota) ? '<llm-token-limit counter-key="@(context.Subscription?.Id ?? "anonymous")"${rateAttr}${quotaAttr} estimate-prompt-tokens="${estimateVal}" remaining-tokens-header-name="x-ratelimit-remaining-tokens" remaining-quota-tokens-header-name="x-quota-remaining-tokens" tokens-consumed-header-name="x-tokens-consumed" />' : ''
+
+var emitBlock = costAttribution ? '<llm-emit-token-metric namespace="ai-governance"><dimension name="Subscription" value="@(context.Subscription?.Name ?? "anonymous")" /><dimension name="Product" value="@(context.Product?.Name ?? "none")" /><dimension name="API" value="@(context.Api.Name)" /><dimension name="Client IP" value="@(context.Request.IpAddress)" /><dimension name="Agent ID" value="@(context.Request.Headers.GetValueOrDefault("x-agent-id", "unspecified"))" /></llm-emit-token-metric>' : ''
+
+var csPromptVal = contentSafetyPrompt ? 'true' : 'false'
+var csResponseVal = contentSafetyResponse ? 'true' : 'false'
+var csBlock = (contentSafetyPrompt || contentSafetyResponse) ? '<llm-content-safety backend-id="content-safety-backend" shield-prompt="${csPromptVal}" enforce-on-completions="${csResponseVal}"><categories output-type="EightSeverityLevels"><category name="Hate" threshold="4" /><category name="Violence" threshold="4" /><category name="SelfHarm" threshold="4" /><category name="Sexual" threshold="4" /></categories></llm-content-safety>' : ''
+
+var cacheLookupBlock = semanticCache ? '<llm-semantic-cache-lookup score-threshold="{{cache-score-threshold}}" embeddings-backend-id="embeddings-backend" embeddings-backend-auth="system-assigned" ignore-system-messages="true" max-message-count="10"><vary-by>@(context.Subscription?.Id ?? "anonymous")</vary-by></llm-semantic-cache-lookup>' : ''
+var cacheStoreBlock = semanticCache ? '<llm-semantic-cache-store duration="3600" />' : ''
+
+var composedPolicy = replace(replace(replace(replace(replace(replace(loadTextContent('../policies/llm-governance.xml'), '<!-- FAILOVER_BACKEND -->', failoverBlock), '<!-- TOKEN_LIMIT -->', tokenLimitBlock), '<!-- EMIT_TOKEN_METRIC -->', emitBlock), '<!-- CONTENT_SAFETY -->', csBlock), '<!-- SEMANTIC_CACHE_LOOKUP -->', cacheLookupBlock), '<!-- SEMANTIC_CACHE_STORE -->', cacheStoreBlock)
+
 resource openAiApiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
   parent: openAiApi
   name: 'policy'
   properties: {
     format: 'rawxml'
-    // Inject the pool route only when modelFailover is on; otherwise the marker is
-    // removed and the API falls back to its serviceUrl (single-backend behaviour).
-    value: replace(
-      loadTextContent('../policies/llm-governance.xml'),
-      '<!-- FAILOVER_BACKEND -->',
-      modelFailover ? '<set-backend-service backend-id="openai-pool" />' : ''
-    )
+    value: composedPolicy
   }
   dependsOn: [
     embeddingsBackend

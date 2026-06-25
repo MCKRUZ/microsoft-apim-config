@@ -327,6 +327,13 @@ module llmApi 'modules/llm-api.bicep' = {
     apimLoggerId: apim.outputs.apimLoggerId
     dataMasking: masking
     modelFailover: failover
+    tokenRateLimit: bool(flags.tokenRateLimit)
+    tokenQuota: bool(flags.tokenQuota)
+    preflightReject: bool(flags.preflightReject)
+    costAttribution: bool(flags.costAttribution)
+    contentSafetyPrompt: bool(flags.contentSafetyPrompt)
+    contentSafetyResponse: bool(flags.contentSafetyResponse)
+    semanticCache: bool(flags.semanticCache)
   }
   // Named values must exist before the policy that references them is validated.
   dependsOn: [
