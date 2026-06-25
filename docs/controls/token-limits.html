@@ -62,13 +62,13 @@ so a rejected request never bills the backend.</p>
 <li>Policy: <code>infra/policies/llm-governance.xml</code>.</li>
 <li>Named values <code>tpm-limit</code>, <code>token-quota</code> provisioned in <code>infra/modules/apim.bicep</code>.</li>
 <li><code>counter-key</code> is <code>context.Subscription.Id</code> — each team product/subscription
-  (<code>team-research</code>, <code>team-platform</code>) is an independent counter.</li>
+(<code>team-research</code>, <code>team-platform</code>) is an independent counter.</li>
 </ul>
 <h2 id="how-to-verify">How to verify</h2>
 <ol>
 <li>Run <code>scripts/smoke-test.{sh,ps1}</code> against
-   <code>/openai/deployments/chat/chat/completions?api-version=2024-10-21</code> with a team key
-   in the <code>api-key</code> header.</li>
+<code>/openai/deployments/chat/chat/completions?api-version=2024-10-21</code> with a team key
+in the <code>api-key</code> header.</li>
 <li>Inspect <code>x-tokens-remaining</code> / <code>x-tokens-consumed</code> response headers — they decrement.</li>
 <li>Fire requests fast enough to exceed TPM → expect <code>429</code>.</li>
 <li>Send a deliberately huge prompt → expect pre-flight rejection (no backend bill).</li>
@@ -76,11 +76,12 @@ so a rejected request never bills the backend.</p>
 <h2 id="caveats">Caveats</h2>
 <ul>
 <li><strong>Per-region counting.</strong> Token quota counts PER gateway region/instance. A
-  company-wide cap needs per-region math. Note: the older <em>request</em>-based limits summed
-  across regions; this token limit does <strong>not</strong>. Multi-region (PremiumV2) changes the
-  budget arithmetic.</li>
+company-wide cap needs per-region math. Note: the older <em>request</em>-based limits summed
+across regions; this token limit does <strong>not</strong>. Multi-region (PremiumV2) changes the
+budget arithmetic.</li>
 <li>Available on Developer and v2 tiers. <strong>Not</strong> on Consumption.</li>
 </ul>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

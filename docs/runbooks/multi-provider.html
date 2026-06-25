@@ -71,9 +71,11 @@ ship as a guided script (<a href="../adr/0003-preview-via-scripts.html">ADR-0003
 <p><strong>Multi-provider (v2-only) and multi-region (Premium classic only) cannot coexist in one
 instance today.</strong> (<a href="../enterprise/target-architecture.html#3-tier-decision-the-load-bearing-choice">target-architecture §3</a>)</p>
 </blockquote>
-<p>If you need both, run them as <strong>separate instances behind the same edge</strong>:
-- a <strong>Premium classic</strong> instance for multi-region OpenAI (Phase 5), and
-- a <strong>v2</strong> instance (or a <strong>self-hosted gateway sidecar</strong>) for the multi-provider doorway.</p>
+<p>If you need both, run them as <strong>separate instances behind the same edge</strong>:</p>
+<ul>
+<li>a <strong>Premium classic</strong> instance for multi-region OpenAI (Phase 5), and</li>
+<li>a <strong>v2</strong> instance (or a <strong>self-hosted gateway sidecar</strong>) for the multi-provider doorway.</li>
+</ul>
 <p>A v2 instance has no multi-region; a Premium-classic instance can't do the v2 unified doorway.
 This is a current Azure limit — revisit when v2 ships multi-region.</p>
 <h2 id="secret-handling-usekeyvault">Secret handling (<code>useKeyVault</code>)</h2>
@@ -81,13 +83,13 @@ This is a current Azure limit — revisit when v2 ships multi-region.</p>
 provider key is the <strong>first real secret</strong>, and Key Vault is its home:</p>
 <ol>
 <li>Deploy with <code>useKeyVault</code> on (test/prod/regulated default it). <code>modules/keyvault.bicep</code>
-   creates the vault and grants APIM's MI <strong>Key Vault Secrets User</strong>.</li>
-<li>Store the key (out-of-band — never in a template):
-   <code>bash
-   az keyvault secret set --vault-name &lt;KEY_VAULT_NAME&gt; --name anthropic-api-key --value &lt;key&gt;</code></li>
+creates the vault and grants APIM's MI <strong>Key Vault Secrets User</strong>.</li>
+<li>Store the key (out-of-band — never in a template):<pre><code class="language-bash">az keyvault secret set --vault-name &lt;KEY_VAULT_NAME&gt; --name anthropic-api-key --value &lt;key&gt;
+</code></pre>
+</li>
 <li>Create a <strong>Key Vault reference</strong> named value <code>anthropic-api-key</code> → APIM resolves it at
-   runtime and rotates without redeploy. The plaintext never touches a template, output, or
-   named-value body.</li>
+runtime and rotates without redeploy. The plaintext never touches a template, output, or
+named-value body.</li>
 </ol>
 <blockquote>
 <p>Ordering gotcha: APIM validates a KV-reference named value when it's created, so the secret
@@ -101,8 +103,8 @@ Key Vault + APIM names. Summary:</p>
 <li>Named value <code>anthropic-api-key</code> → the KV secret.</li>
 <li>Backend <code>https://api.anthropic.com</code>, credential header <code>x-api-key = {{anthropic-api-key}}</code>.</li>
 <li>Unified model API → add model <code>claude</code>, format <strong>Anthropic Messages</strong>, backend = the
-   Anthropic backend. <strong>Reuse the same token-limit / content-safety policies</strong> — governance is
-   provider-agnostic; that's the whole point of the doorway.</li>
+Anthropic backend. <strong>Reuse the same token-limit / content-safety policies</strong> — governance is
+provider-agnostic; that's the whole point of the doorway.</li>
 </ol>
 <h2 id="why-you-cant-just-pool-openai-claude-for-failover">Why you can't just pool OpenAI + Claude for failover</h2>
 <p>The Phase-5 <code>openai-pool</code> load-balances across backends that speak the <strong>same</strong> wire format.
@@ -113,11 +115,12 @@ provider = Phase 6 (preview doorway). Don't mix them in one pool.</p>
 <h2 id="verify">Verify</h2>
 <ul>
 <li><code>useKeyVault</code>: Key Vault exists; APIM MI has <strong>Key Vault Secrets User</strong> (Access control → role
-  assignments).</li>
+assignments).</li>
 <li>After the guided steps: <code>GET /llm/v1/models</code> lists both <code>gpt-4o</code> and <code>claude</code>; a call to
-  <code>/llm/v1/chat/completions</code> with <code>model: claude</code> is governed (token-limit + content-safety fire)
-  and translated. Confirm token metrics carry the model dimension.</li>
+<code>/llm/v1/chat/completions</code> with <code>model: claude</code> is governed (token-limit + content-safety fire)
+and translated. Confirm token metrics carry the model dimension.</li>
 </ul>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

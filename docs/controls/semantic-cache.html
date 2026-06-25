@@ -59,17 +59,17 @@ those from cache cuts token spend and latency. Lookup runs inbound; store runs o
 <ul>
 <li>Policy: <code>infra/policies/llm-governance.xml</code>.</li>
 <li>Azure Managed Redis (with the <strong>RediSearch</strong> module) provisioned in
-  <code>infra/modules/redis.bicep</code> and registered as the APIM external cache.</li>
+<code>infra/modules/redis.bicep</code> and registered as the APIM external cache.</li>
 <li><code>text-embedding-3-small</code> deployment (<code>embeddings</code>) on the Azure OpenAI account
-  (<code>infra/modules/openai.bicep</code>), surfaced as the <code>embeddings-backend</code> whose MI auth is
-  the <code>embeddings-backend-auth="system-assigned"</code> attribute.</li>
+(<code>infra/modules/openai.bicep</code>), surfaced as the <code>embeddings-backend</code> whose MI auth is
+the <code>embeddings-backend-auth=&quot;system-assigned&quot;</code> attribute.</li>
 <li><code>cache-score-threshold</code> is a named value — tune via
-  <a href="../runbooks/tune-cache.html">runbooks/tune-cache</a>.</li>
+<a href="../runbooks/tune-cache.html">runbooks/tune-cache</a>.</li>
 </ul>
 <h2 id="how-to-verify">How to verify</h2>
 <ol>
 <li>Run <code>scripts/smoke-test.{sh,ps1}</code> twice with the <em>same</em> prompt; the second response
-   should be served from cache (much lower latency, no backend token burn).</li>
+should be served from cache (much lower latency, no backend token burn).</li>
 <li>Send a <em>reworded but equivalent</em> prompt — still a hit at the default threshold.</li>
 <li>Confirm a different team key does <strong>not</strong> hit the first team's cache (vary-by).</li>
 <li>Cache hit rate is visible via APIM trace / App Insights.</li>
@@ -77,12 +77,13 @@ those from cache cuts token spend and latency. Lookup runs inbound; store runs o
 <h2 id="caveats">Caveats</h2>
 <ul>
 <li><strong>RediSearch can only be enabled at cache CREATION</strong> — it cannot be retrofitted. A
-  Redis instance built without it must be replaced, not upgraded.</li>
+Redis instance built without it must be replaced, not upgraded.</li>
 <li>Similarity matching can surface <strong>stale, incorrect, or unsafe</strong> answers. That is why
-  <code>llm-content-safety</code> runs <strong>before</strong> the cache lookup — safety screens first, cache
-  serves second. Do not reorder.</li>
+<code>llm-content-safety</code> runs <strong>before</strong> the cache lookup — safety screens first, cache
+serves second. Do not reorder.</li>
 <li>Available on Developer and v2 tiers. <strong>Not</strong> on Consumption.</li>
 </ul>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

@@ -25,7 +25,7 @@ flowchart TB
         FD["Azure Front Door Premium + WAF"]
     end
     subgraph Hub["Hub VNet (per region)"]
-        APIM["APIM Premium / Premium v2\n(VNet injected, private VIP)"]
+        APIM["APIM Premium / Premium v2<br/>(VNet injected, private VIP)"]
         PE["Private Endpoints"]
         KV["Key Vault"]
         OBS["Log Analytics · App Insights · Sentinel"]

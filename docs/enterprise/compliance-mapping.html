@@ -158,10 +158,10 @@
 </table>
 <h2 id="how-to-use-this">How to use this</h2>
 <ol>
-<li><strong>Map obligation → control → evidence.</strong> For an audit, each row's "evidence" is concrete: Log Analytics queries, App Insights metrics, the git history of policy changes, the deployment <code>what-if</code> records, the Sentinel incidents. Policy-as-code in git <em>is</em> the Art. 11 / ISO 7.5 technical documentation.</li>
+<li><strong>Map obligation → control → evidence.</strong> For an audit, each row's &quot;evidence&quot; is concrete: Log Analytics queries, App Insights metrics, the git history of policy changes, the deployment <code>what-if</code> records, the Sentinel incidents. Policy-as-code in git <em>is</em> the Art. 11 / ISO 7.5 technical documentation.</li>
 <li><strong>Profiles encode obligation tiers.</strong> The <code>regulated</code> profile (see <a href="capability-toggles.html">capability-toggles.md</a>) turns on every control a high-risk EU AI Act system needs; <code>prod</code> is a strong baseline; <code>dev</code> is non-production and labelled as such.</li>
 <li><strong>Gaps are documented, not hidden.</strong> <a href="../caveats.html">caveats.md</a> is itself an Art. 9 / GOVERN-4 artifact: an honest risk register of what the controls do and don't do (streaming content-safety limits, cache staleness, preview surfaces). Auditors trust a documented limitation more than an undocumented assumption.</li>
-<li><strong>The chokepoint centralizes evidence.</strong> Because every model/tool/agent call transits one plane, "produce the log of every action agent X took in Q2" is one query — the difference between an audit you pass and one you can't answer.</li>
+<li><strong>The chokepoint centralizes evidence.</strong> Because every model/tool/agent call transits one plane, &quot;produce the log of every action agent X took in Q2&quot; is one query — the difference between an audit you pass and one you can't answer.</li>
 </ol>
 <h2 id="what-the-gateway-does-not-cover-state-these-to-risk-teams">What the gateway does NOT cover (state these to risk teams)</h2>
 <ul>
@@ -169,6 +169,7 @@
 <li><strong>Agent business logic</strong> — whether an agent <em>should</em> take an action it's authorized to take is an app-layer decision; the gateway enforces <em>can it reach the system, at what rate, with what identity, on the record</em>.</li>
 <li><strong>Discovery of ungoverned paths</strong> — the gateway can't govern a call that doesn't transit it. Network isolation (§4) plus periodic egress audits close this; it's a discipline, not an automatic guarantee.</li>
 </ul>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

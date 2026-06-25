@@ -92,7 +92,7 @@ azd up
 </code></pre>
 <p>The <code>governance-global</code> floor (incl. <code>entraAuth</code>) works on <strong>every</strong> tier; only the
 workspaces half carries the tier requirement.</p>
-<h2 id="the-federation-contract-why-base-matters">The federation contract (why <code>&lt;base/&gt;</code> matters)</h2>
+<h2 id="the-federation-contract-why-ltbasegt-matters">The federation contract (why <code>&lt;base/&gt;</code> matters)</h2>
 <pre><code>Global (All APIs) policy   ── platform team owns ──►  &lt;base/&gt; + correlation + [Entra JWT]
         ▲ inherited by
 Workspace policy (per BU)   ── BU team owns ───────►  &lt;base/&gt;  + (BU may ADD narrower rules)
@@ -135,19 +135,20 @@ the smoke test against a <code>dev</code>-profile deploy, or extend it to fetch 
 <li>Portal → APIM → workspace → <strong>Policies</strong> → the <code>&lt;base/&gt;</code> policy is present.</li>
 <li>Portal → <strong>Policy</strong> → Assignments → <code>apim-base-inheritance</code> present (Audit/Deny).</li>
 <li>With <code>entraAuth</code> on: a key-only call returns <strong>401</strong>; a call with a valid token for the
-  audience returns <strong>200</strong>.</li>
+audience returns <strong>200</strong>.</li>
 <li>Calculate effective policy on a workspace API → confirm the global floor is inherited.</li>
 </ul>
 <h2 id="honest-constraints">Honest constraints</h2>
 <ul>
 <li><strong>Workspace gateways</strong> (runtime isolation per BU) and <strong>workspace-level diagnostic
-  settings</strong> (federated logging) are additional resources not deployed here — this phase
-  establishes the workspace + RBAC + inheritance model on the default managed gateway.
-  Add workspace gateways when a mission-critical BU needs runtime isolation.</li>
+settings</strong> (federated logging) are additional resources not deployed here — this phase
+establishes the workspace + RBAC + inheritance model on the default managed gateway.
+Add workspace gateways when a mission-critical BU needs runtime isolation.</li>
 <li>Workspace <strong>gateway provisioning can take hours</strong>; plan BU onboarding accordingly.</li>
 <li>MCP/A2A preview surfaces are <strong>not yet supported inside workspaces</strong> — keep those at
-  the service scope for now.</li>
+the service scope for now.</li>
 </ul>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

@@ -45,44 +45,45 @@ via <code>&lt;base/&gt;</code>.</p>
 <h2 id="decision">Decision</h2>
 <ul>
 <li><strong>A global policy floor</strong> (<code>modules/governance-global.bicep</code>) deployed in every profile.
-  It carries the platform-team controls (correlation; Entra JWT when <code>entraAuth</code>). Built by
-  <strong>splicing a fragment</strong> into a marker (<code>&lt;!-- ENTRA_JWT --&gt;</code>) so a disabled control leaves
-  no dead policy — the assembly pattern from the toggle catalog, now used for real.</li>
+It carries the platform-team controls (correlation; Entra JWT when <code>entraAuth</code>). Built by
+<strong>splicing a fragment</strong> into a marker (<code>&lt;!-- ENTRA_JWT --&gt;</code>) so a disabled control leaves
+no dead policy — the assembly pattern from the toggle catalog, now used for real.</li>
 <li><strong>Per-BU workspaces</strong> (<code>modules/federation.bicep</code>) with workspace-scoped <strong>Workspace
-  Contributor</strong> RBAC (assigned only when an Entra group is supplied — demo BUs deploy
-  without bogus principals).</li>
+Contributor</strong> RBAC (assigned only when an Entra group is supplied — demo BUs deploy
+without bogus principals).</li>
 <li><strong><code>&lt;base/&gt;</code> enforced two ways:</strong> the Phase-2 policy lint at author time, and the built-in
-  Azure Policy <code>d5448c98-…</code> (Audit by default, Deny optional) at deploy/runtime. Defense in
-  depth on the one invariant that makes federation safe — a BU can add policy, never strip
-  the central floor.</li>
+Azure Policy <code>d5448c98-…</code> (Audit by default, Deny optional) at deploy/runtime. Defense in
+depth on the one invariant that makes federation safe — a BU can add policy, never strip
+the central floor.</li>
 <li><strong>Entra JWT at the global scope</strong>, not per-API. The security-identity floor applies to
-  every surface (model/tool/agent), matching §6. Subscription key stays for <em>attribution</em>;
-  JWT is <em>identity</em>.</li>
+every surface (model/tool/agent), matching §6. Subscription key stays for <em>attribution</em>;
+JWT is <em>identity</em>.</li>
 </ul>
 <h2 id="honest-constraints-carried">Honest constraints carried</h2>
 <ul>
 <li><strong>Workspaces require a v2/Premium tier</strong> — verified; the Developer seed default does NOT
-  support them, so <code>workspaces: true</code> on Developer fails. Documented loudly in the module
-  header, runbook, and <a href="../caveats.html">caveats §13</a>; profiles that enable workspaces must
-  set a v2 SKU. Bicep can't fail-fast on a param combination without experimental <code>assert</code>,
-  so this is a documented precondition, not a compile guard.</li>
+support them, so <code>workspaces: true</code> on Developer fails. Documented loudly in the module
+header, runbook, and <a href="../caveats.html">caveats §13</a>; profiles that enable workspaces must
+set a v2 SKU. Bicep can't fail-fast on a param combination without experimental <code>assert</code>,
+so this is a documented precondition, not a compile guard.</li>
 <li><strong><code>entraAuth</code> on changes the caller contract</strong> to require a bearer token; the key-only
-  smoke test returns 401 by design. Called out in the runbook.</li>
+smoke test returns 401 by design. Called out in the runbook.</li>
 <li><strong>Workspace gateways / workspace diagnostics</strong> (runtime + logging isolation per BU) are
-  deferred — this phase establishes the workspace + RBAC + inheritance model on the default
-  managed gateway. YAGNI until a BU needs hard runtime isolation.</li>
+deferred — this phase establishes the workspace + RBAC + inheritance model on the default
+managed gateway. YAGNI until a BU needs hard runtime isolation.</li>
 <li>A workspace collaborator needs <strong>both</strong> a workspace-scoped and a service-scoped role; we
-  assign the workspace-scoped one and document the service-scoped requirement.</li>
+assign the workspace-scoped one and document the service-scoped requirement.</li>
 </ul>
 <h2 id="consequences">Consequences</h2>
 <ul>
 <li><code>dev</code> is unchanged at runtime except for the benign global floor (base + correlation; no
-  JWT). <code>test</code>/<code>prod</code>/<code>regulated</code> gain JWT and (with a v2 SKU) the BU workspaces + enforced
-  inheritance.</li>
+JWT). <code>test</code>/<code>prod</code>/<code>regulated</code> gain JWT and (with a v2 SKU) the BU workspaces + enforced
+inheritance.</li>
 <li>New policy assets: <code>global-governance.xml</code>, <code>fragments/entra-jwt.xml</code>, <code>workspace-base.xml</code>.
-  Fragments live in <code>policies/fragments/</code> so the structural linter (top-level glob) skips them.</li>
+Fragments live in <code>policies/fragments/</code> so the structural linter (top-level glob) skips them.</li>
 <li>Compiles clean; lint passes (5 top-level policies).</li>
 </ul>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

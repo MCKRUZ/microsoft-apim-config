@@ -56,9 +56,9 @@ other surface.</p>
 <h2 id="how-to-provision">How to provision</h2>
 <ol>
 <li>Run <code>scripts/provision-preview.{sh,ps1}</code> — handles the A2A import (no stable Bicep type
-   yet).</li>
+yet).</li>
 <li>Or in the portal: import the A2A agent by its JSON-RPC endpoint; APIM generates the
-   re-projected agent card.</li>
+re-projected agent card.</li>
 <li>Attach the governance policy below.</li>
 </ol>
 <h2 id="governance-policy">Governance policy</h2>
@@ -67,13 +67,14 @@ other surface.</p>
 <ul>
 <li><strong>JSON-RPC only.</strong></li>
 <li><strong>No outgoing response-body deserialization</strong> — policies cannot inspect/transform the
-  JSON-RPC response payload.</li>
+JSON-RPC response payload.</li>
 <li>Preview: import behavior and card projection may change.</li>
 </ul>
 <h2 id="test">Test</h2>
 <p>Call the re-projected agent card URL on the APIM host with a team subscription key;
 confirm the hostname is rewritten to APIM and that <code>gen_ai.agent.id</code> /
 <code>gen_ai.agent.name</code> appear in the OTel trace.</p>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

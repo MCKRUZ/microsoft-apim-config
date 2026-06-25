@@ -41,44 +41,47 @@
 <p>See <a href="../architecture.html">architecture</a>.</p>
 <h2 id="steps">Steps</h2>
 <ol>
-<li>Extend the <code>teams</code> parameter in <code>infra/modules/products.bicep</code> (or the corresponding
-   entry in <code>infra/main.parameters.json</code>). The repo ships with <code>team-research</code> and
-   <code>team-platform</code>; add your new team alongside them.</li>
+<li>
+<p>Extend the <code>teams</code> parameter in <code>infra/modules/products.bicep</code> (or the corresponding
+entry in <code>infra/main.parameters.json</code>). The repo ships with <code>team-research</code> and
+<code>team-platform</code>; add your new team alongside them.</p>
+<pre><code class="language-bicep">param teams array = [
+  'team-research'
+  'team-platform'
+  'team-newgroup'   // &lt;-- add
+]
+</code></pre>
+</li>
+<li>
+<p>Redeploy:</p>
+<pre><code class="language-bash">azd up
+# or: az deployment sub create -l &lt;region&gt; -f infra/main.bicep -p infra/main.parameters.json
+</code></pre>
+</li>
+<li>
+<p>Retrieve the new team's key (its identity):</p>
+<pre><code class="language-bash">az apim subscription show -g rg-&lt;env&gt; --service-name &lt;apim-name&gt; \
+  --sid team-newgroup --query primaryKey -o tsv
+</code></pre>
+</li>
 </ol>
-<p><code>bicep
-   param teams array = [
-     'team-research'
-     'team-platform'
-     'team-newgroup'   // &lt;-- add
-   ]</code></p>
-<ol start="2">
-<li>Redeploy:</li>
-</ol>
-<p><code>bash
-   azd up
-   # or: az deployment sub create -l &lt;region&gt; -f infra/main.bicep -p infra/main.parameters.json</code></p>
-<ol start="3">
-<li>Retrieve the new team's key (its identity):</li>
-</ol>
-<p><code>bash
-   az apim subscription show -g rg-&lt;env&gt; --service-name &lt;apim-name&gt; \
-     --sid team-newgroup --query primaryKey -o tsv</code></p>
 <h2 id="what-you-do-not-need-to-do">What you do NOT need to do</h2>
 <ul>
 <li><strong>No policy edits.</strong> <code>infra/policies/llm-governance.xml</code> keys every control off
-  <code>context.Subscription.Id</code>, so a new subscription is automatically rate-limited,
-  metered, and cache-isolated.</li>
+<code>context.Subscription.Id</code>, so a new subscription is automatically rate-limited,
+metered, and cache-isolated.</li>
 <li>Token quota, cost-attribution dimensions, and semantic-cache vary-by all bind to the
-  new subscription with no further changes.</li>
+new subscription with no further changes.</li>
 </ul>
 <h2 id="verify">Verify</h2>
 <p>Run <code>scripts/smoke-test.{sh,ps1}</code> with the new key and confirm:</p>
 <ul>
 <li>completions return <code>200</code>,</li>
 <li>the team appears as its own series in App Insights (<code>Subscription</code> dimension — see
-  <a href="../controls/cost-attribution.html">cost-attribution</a>),</li>
+<a href="../controls/cost-attribution.html">cost-attribution</a>),</li>
 <li>it cannot read another team's cache (<a href="../controls/semantic-cache.html">semantic-cache</a>).</li>
 </ul>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

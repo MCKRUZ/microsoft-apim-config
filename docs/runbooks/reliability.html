@@ -75,10 +75,10 @@ exclusive in one instance today.</strong> This is a current Azure limit, not a d
 </blockquote>
 <ul>
 <li><strong>Resilience-first</strong> (Dell/T-Mobile class, global latency): anchor on <strong>Premium classic</strong>,
-  <code>multiRegion</code> + <code>availabilityZones</code>, govern OpenAI in-gateway. Add Claude later via a
-  separate v2 instance / sidecar (<code>multiProvider</code>, Phase 6).</li>
+<code>multiRegion</code> + <code>availabilityZones</code>, govern OpenAI in-gateway. Add Claude later via a
+separate v2 instance / sidecar (<code>multiProvider</code>, Phase 6).</li>
 <li><strong>Provider-independence-first</strong>: anchor on a <strong>v2</strong> tier (Premium v2), get AZ + the unified
-  doorway, but <strong>no</strong> multi-region until v2 ships it.</li>
+doorway, but <strong>no</strong> multi-region until v2 ships it.</li>
 </ul>
 <p>The seed defaults to <strong>Developer</strong>, which supports neither AZ nor multi-region. Turning on
 <code>availabilityZones</code>/<code>multiRegion</code> therefore <strong>requires a tier change</strong> — set <code>APIM_SKU</code> to
@@ -99,13 +99,15 @@ az deployment sub create -l eastus2 -f infra/main.bicep -p infra/main.parameters
 az deployment sub create ... -p flagOverrides='{&quot;modelFailover&quot;:true}'
 </code></pre>
 <h2 id="how-modelfailover-works">How <code>modelFailover</code> works</h2>
-<p>When on, <code>llm-api.bicep</code> creates:
-- <strong><code>chat-backend</code></strong> — the Azure OpenAI chat endpoint as a backend with a <strong>circuit breaker</strong>:
-  3 failures (429 or 5xx) in 5 min trips it for 1 min, and it <strong>honours <code>Retry-After</code></strong> on
-  OpenAI throttling. A throttling/failing model then fails fast instead of piling up.
-- <strong><code>openai-pool</code></strong> — a load-balanced <code>Pool</code> backend containing <code>chat-backend</code>.</p>
+<p>When on, <code>llm-api.bicep</code> creates:</p>
+<ul>
+<li><strong><code>chat-backend</code></strong> — the Azure OpenAI chat endpoint as a backend with a <strong>circuit breaker</strong>:
+3 failures (429 or 5xx) in 5 min trips it for 1 min, and it <strong>honours <code>Retry-After</code></strong> on
+OpenAI throttling. A throttling/failing model then fails fast instead of piling up.</li>
+<li><strong><code>openai-pool</code></strong> — a load-balanced <code>Pool</code> backend containing <code>chat-backend</code>.</li>
+</ul>
 <p>The governed policy routes the chat call through the pool via an injected
-<code>&lt;set-backend-service backend-id="openai-pool" /&gt;</code> (the <code>FAILOVER_BACKEND</code> marker in
+<code>&lt;set-backend-service backend-id=&quot;openai-pool&quot; /&gt;</code> (the <code>FAILOVER_BACKEND</code> marker in
 <code>llm-governance.xml</code>). With the flag off, the marker is removed and the API uses its
 <code>serviceUrl</code> as before — no dead policy.</p>
 <p><strong>Single-account caveat:</strong> with one OpenAI account the pool has one member. The circuit
@@ -115,26 +117,27 @@ so each gateway region has a near backend. The pool is built ready for that memb
 <h2 id="interactions-to-get-right">⚠ Interactions to get right</h2>
 <ul>
 <li><strong>Token quota counts per region.</strong> <code>llm-token-limit</code>'s monthly quota is enforced <strong>per
-  gateway region</strong> (<a href="../caveats.html#1-token-quotas-count-per-gateway-region-not-globally">caveats §1</a>).
-  Turn on <code>multiRegion</code> and a 1,000,000-token cap becomes 1M <strong>× regions</strong>. Do the per-region
-  math, or keep the quota single-region.</li>
+gateway region</strong> (<a href="../caveats.html#1-token-quotas-count-per-gateway-region-not-globally">caveats §1</a>).
+Turn on <code>multiRegion</code> and a 1,000,000-token cap becomes 1M <strong>× regions</strong>. Do the per-region
+math, or keep the quota single-region.</li>
 <li><strong>Multi-region + network isolation:</strong> each added region needs its <strong>own subnet + public IP</strong>
-  for the regional gateway. The <code>additionalLocations</code> objects must carry per-region VNet config
-  when <code>networkIsolation</code> is also on — not auto-derived here. Validate before prod.</li>
+for the regional gateway. The <code>additionalLocations</code> objects must carry per-region VNet config
+when <code>networkIsolation</code> is also on — not auto-derived here. Validate before prod.</li>
 <li><strong>AZ capacity:</strong> units must distribute evenly across zones (3 units ↔ 3 zones), or the deploy
-  is rejected.</li>
+is rejected.</li>
 <li><strong>Infra changes take 15+ minutes</strong> (region add, AZ change) and block other infra changes
-  meanwhile; the gateway keeps serving (except Developer).</li>
+meanwhile; the gateway keeps serving (except Developer).</li>
 </ul>
 <h2 id="verify-after-deploy">Verify after deploy</h2>
 <ul>
 <li>Portal → APIM → <strong>Locations</strong> → added regions present, each showing its zones.</li>
 <li>Portal → APIM → overview → the primary shows zone redundancy.</li>
 <li><code>modelFailover</code>: APIM → <strong>Backends</strong> → <code>chat-backend</code> (circuit breaker rule) + <code>openai-pool</code>
-  (type Pool, member listed). Calculate effective policy on the chat operation → the
-  <code>set-backend-service</code> to <code>openai-pool</code> is present.</li>
+(type Pool, member listed). Calculate effective policy on the chat operation → the
+<code>set-backend-service</code> to <code>openai-pool</code> is present.</li>
 <li>Force throttling (low TPM + burst) and watch the breaker trip → fast 5xx, then auto-recover.</li>
 </ul>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

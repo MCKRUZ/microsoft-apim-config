@@ -37,7 +37,7 @@
 <main class="content"><div class="wrap">
 <p><strong>Status:</strong> Accepted · <strong>Date:</strong> 2026-06-25</p>
 <h2 id="context">Context</h2>
-<p>The APIM SKU drives both cost and capability. A "golden copy" is meant to be cloned and actually run, so the default SKU should let someone stand up the <em>entire</em> showcase cheaply, while the docs steer production toward the right tier.</p>
+<p>The APIM SKU drives both cost and capability. A &quot;golden copy&quot; is meant to be cloned and actually run, so the default SKU should let someone stand up the <em>entire</em> showcase cheaply, while the docs steer production toward the right tier.</p>
 <h2 id="decision">Decision</h2>
 <p>Default <code>apimSkuName</code> = <strong>Developer</strong>. Document <strong>StandardV2</strong> as the canonical production target. Parameterise the SKU so it's a one-line change.</p>
 <h2 id="rationale">Rationale</h2>
@@ -52,6 +52,7 @@
 <li>Moving to production = set <code>APIM_SKU=StandardV2</code> (and mind the per-region token-cap math on multi-region). No code changes.</li>
 <li>Consumption is explicitly disallowed (no token-limit governance).</li>
 </ul>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

@@ -58,7 +58,7 @@ custom dimensions per policy).</p>
 <ul>
 <li>Policy: <code>infra/policies/llm-governance.xml</code>.</li>
 <li>App Insights + Log Analytics provisioned in <code>infra/modules/monitoring.bicep</code>; the
-  instrumentation/logger wiring is referenced from <code>infra/modules/apim.bicep</code>.</li>
+instrumentation/logger wiring is referenced from <code>infra/modules/apim.bicep</code>.</li>
 <li><code>Agent ID</code> rides on the <code>x-agent-id</code> request header set by the calling agent.</li>
 </ul>
 <h2 id="how-to-verify">How to verify</h2>
@@ -66,15 +66,16 @@ custom dimensions per policy).</p>
 <li>Run <code>scripts/smoke-test.{sh,ps1}</code> to push a few completions through the gateway.</li>
 <li>In App Insights → Metrics, select the <code>ai-governance</code> namespace and the token metric.</li>
 <li>Split by the <code>Subscription</code> or <code>Agent ID</code> dimension — each team/agent shows its own
-   token totals.</li>
+token totals.</li>
 <li>Confirm <code>team-research</code> and <code>team-platform</code> appear as distinct series.</li>
 </ol>
 <h2 id="caveats">Caveats</h2>
 <ul>
 <li><strong>Hard limit of 5 custom dimensions</strong> per policy (Azure Monitor). Adding a sixth
-  dimension means dropping one — don't exceed it or the metric silently breaks.</li>
+dimension means dropping one — don't exceed it or the metric silently breaks.</li>
 <li>Available on Developer and v2 tiers. <strong>Not</strong> on Consumption.</li>
 </ul>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

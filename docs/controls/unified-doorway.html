@@ -52,7 +52,7 @@ GET  /models                      # discovery endpoint
 </code></pre>
 <ul>
 <li>APIM translates the request to the backend format: <strong>OpenAI Chat Completions</strong> or
-  <strong>Anthropic Messages</strong>.</li>
+<strong>Anthropic Messages</strong>.</li>
 <li><strong>Aliases</strong> decouple client-facing model names from backend deployment names.</li>
 <li>Supports <strong>failover</strong> across backends.</li>
 </ul>
@@ -60,7 +60,7 @@ GET  /models                      # discovery endpoint
 <h2 id="how-to-provision">How to provision</h2>
 <ol>
 <li>Run <code>scripts/provision-preview.{sh,ps1}</code> — sets up the unified API (no stable Bicep
-   type yet).</li>
+type yet).</li>
 <li>Or follow the portal/CLI steps in the Microsoft Learn doc linked above.</li>
 </ol>
 <h2 id="governance">Governance</h2>
@@ -70,13 +70,14 @@ GET  /models                      # discovery endpoint
 <h2 id="limitations-caveats">Limitations / caveats</h2>
 <ul>
 <li>Adding Claude = add a backend with format <strong>Anthropic Messages</strong>, and it <strong>requires
-  StandardV2 tier</strong> — Anthropic token-limit/cache support is <strong>v2-only</strong>. See
-  <a href="../runbooks/add-claude.html">runbooks/add-claude</a>.</li>
+StandardV2 tier</strong> — Anthropic token-limit/cache support is <strong>v2-only</strong>. See
+<a href="../runbooks/add-claude.html">runbooks/add-claude</a>.</li>
 <li>Preview: API shape and management surface may change.</li>
 </ul>
 <h2 id="test">Test</h2>
 <p><code>GET /models</code> should list the configured aliases; <code>POST /llm/v1/chat/completions</code> with a
 team key should return an OpenAI-shaped completion from the Azure OpenAI backend.</p>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

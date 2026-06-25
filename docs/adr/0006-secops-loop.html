@@ -40,42 +40,43 @@
 <p>Phase 3 of the <a href="../enterprise/target-architecture.html">target architecture</a> (§9, <code>secOpsLoop</code>)
 turns telemetry into action: Sentinel/Defender for threat coverage, budget-breach →
 auto-throttle, injection-spike alerting, and log data protection. The question was how
-much of the "action" is honestly deployable as GA Bicep vs. a documented wiring step.</p>
+much of the &quot;action&quot; is honestly deployable as GA Bicep vs. a documented wiring step.</p>
 <h2 id="decision">Decision</h2>
 <ul>
 <li><strong>Deploy the detection plane as GA Bicep</strong> (<code>modules/secops.bicep</code>): a diagnostic
-  setting routing <code>GatewayLogs</code> + <code>GatewayLlmLogs</code> to Log Analytics, Sentinel onboarding,
-  an action group, and two log alerts (budget threshold, injection 403-spike). Defender
-  for APIs is a subscription-scope plan, enabled in <code>main.bicep</code>.</li>
+setting routing <code>GatewayLogs</code> + <code>GatewayLlmLogs</code> to Log Analytics, Sentinel onboarding,
+an action group, and two log alerts (budget threshold, injection 403-spike). Defender
+for APIs is a subscription-scope plan, enabled in <code>main.bicep</code>.</li>
 <li><strong>Ground every alert query in a verified table.</strong> Budget = <code>sum(TotalTokens)</code> from
-  <code>ApiManagementGatewayLlmLog</code>; injection = 403 count from <code>ApiManagementGatewayLogs</code>.
-  Both tables/columns verified against the Azure Monitor table reference.</li>
+<code>ApiManagementGatewayLlmLog</code>; injection = 403 count from <code>ApiManagementGatewayLogs</code>.
+Both tables/columns verified against the Azure Monitor table reference.</li>
 <li><strong>Actuate enforcement with a script, not a deployed workflow.</strong> The budget alert's
-  remediation (lower the <code>tokens-per-minute</code> named value) is <code>scripts/throttle.*</code>, wired
-  to the action group via an Automation runbook / Logic App. A hand-rolled workflow JSON
-  in Bicep is brittle for a reference repo; the script + documented wiring is more durable.</li>
+remediation (lower the <code>tokens-per-minute</code> named value) is <code>scripts/throttle.*</code>, wired
+to the action group via an Automation runbook / Logic App. A hand-rolled workflow JSON
+in Bicep is brittle for a reference repo; the script + documented wiring is more durable.</li>
 <li><strong><code>dataMasking</code> does only what it can.</strong> It Hides the <code>api-key</code>/<code>subscription-key</code>/
-  <code>Authorization</code> secret-leak vector on the App Insights diagnostic. It does <strong>not</strong> touch
-  prompt/completion bodies — APIM masking is headers/query only.</li>
+<code>Authorization</code> secret-leak vector on the App Insights diagnostic. It does <strong>not</strong> touch
+prompt/completion bodies — APIM masking is headers/query only.</li>
 </ul>
 <h2 id="rationale">Rationale</h2>
 <ul>
 <li>The alternative (faking auto-throttle as a Logic App, or alerting on an unverified
-  custom-metric name) would be dishonest about what reliably works. Detection is genuinely
-  GA; remediation genuinely needs an actuator. Saying so is the golden-copy contract.</li>
+custom-metric name) would be dishonest about what reliably works. Detection is genuinely
+GA; remediation genuinely needs an actuator. Saying so is the golden-copy contract.</li>
 <li>Token <em>counts</em> (<code>TotalTokens</code>) are metadata, safe to collect even in <code>regulated</code>. Prompt
-  <em>bodies</em> are the PII risk and are governed by <code>promptLogging</code>, not masking — keeping the
-  two concerns separate avoids the trap of "we masked it" when nothing masked the body.</li>
+<em>bodies</em> are the PII risk and are governed by <code>promptLogging</code>, not masking — keeping the
+two concerns separate avoids the trap of &quot;we masked it&quot; when nothing masked the body.</li>
 </ul>
 <h2 id="consequences">Consequences</h2>
 <ul>
 <li>Out of the box: Sentinel + Defender + two alerts + email + one-command throttle. Fully
-  automatic throttle is a documented runbook/Logic App wiring step.</li>
+automatic throttle is a documented runbook/Logic App wiring step.</li>
 <li><code>dataMasking</code> flag wires header/query Hide into <code>modules/llm-api.bicep</code> (per-direction
-  <code>frontend</code>/<code>backend</code> pipeline settings — masking is not a top-level diagnostic property).</li>
+<code>frontend</code>/<code>backend</code> pipeline settings — masking is not a top-level diagnostic property).</li>
 <li>New caveats <a href="../caveats.html">§11</a> (masking scope) and <a href="../caveats.html">§12</a> (actuator + Defender billing).</li>
 <li>Compiles clean; <code>dev</code> (secOpsLoop off) is unchanged. <code>prod</code>/<code>regulated</code> get the loop.</li>
 </ul>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

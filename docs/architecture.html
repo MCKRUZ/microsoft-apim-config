@@ -54,22 +54,22 @@
 
     subgraph CP["Control plane — Azure API Management"]
         K["Subscription key = team / app identity"]
-        LLM["Governed LLM API\n(/openai)"]
-        UNI["Unified model API (preview)\n(/llm/v1)"]
-        MCP["MCP server (preview)\n(/<api>-mcp/mcp)"]
+        LLM["Governed LLM API<br/>(/openai)"]
+        UNI["Unified model API (preview)<br/>(/llm/v1)"]
+        MCP["MCP server (preview)<br/>(/{api}-mcp/mcp)"]
         A2A["A2A agent API (preview)"]
-        POL["Policies:\ntoken-limit · emit-metric\ncontent-safety · semantic-cache"]
+        POL["Policies:<br/>token-limit · emit-metric<br/>content-safety · semantic-cache"]
     end
 
     subgraph BK["Backends"]
-        AOAI["Azure OpenAI\n(gpt-4o, embeddings)"]
-        REDIS["Azure Managed Redis\n(RediSearch)"]
-        CS["Azure AI Content Safety\n(Prompt Shields)"]
+        AOAI["Azure OpenAI<br/>(gpt-4o, embeddings)"]
+        REDIS["Azure Managed Redis<br/>(RediSearch)"]
+        CS["Azure AI Content Safety<br/>(Prompt Shields)"]
         TOOL["REST API / MCP backend"]
         AGENT["A2A JSON-RPC agent"]
     end
 
-    OBS["Log Analytics + App Insights\n(token metrics, prompts, completions)"]
+    OBS["Log Analytics + App Insights<br/>(token metrics, prompts, completions)"]
 
     A1 & A2 & A3 --> K
     K --> LLM & UNI & MCP & A2A
@@ -164,6 +164,7 @@
 </tbody>
 </table>
 <p>See <a href="maturity-matrix.html">maturity-matrix.md</a> for GA-vs-preview status and <a href="caveats.html">caveats.md</a> for the limits that shaped these choices.</p>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

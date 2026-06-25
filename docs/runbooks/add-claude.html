@@ -52,36 +52,37 @@ tier cannot govern Anthropic traffic with the GA controls. You must be on <stron
 </li>
 <li>
 <p>Wire it one of two ways:</p>
-</li>
-</ol>
 <ul>
 <li><strong>Preferred — unified model API.</strong> Add the Anthropic backend to the existing
-     <code>/llm/v1/chat/completions</code> doorway and create an <strong>alias</strong> for the Claude model.
-     Clients keep sending OpenAI Chat Completions shape; APIM translates to Anthropic
-     Messages. Supports failover across backends.</li>
+<code>/llm/v1/chat/completions</code> doorway and create an <strong>alias</strong> for the Claude model.
+Clients keep sending OpenAI Chat Completions shape; APIM translates to Anthropic
+Messages. Supports failover across backends.</li>
 <li><strong>Alternative — a second LLM API.</strong> Stand up a separate Anthropic-backed API in
-     APIM.</li>
+APIM.</li>
 </ul>
-<ol start="4">
-<li><strong>Apply the same four GA policies</strong> — the governance contract is identical:
-   <a href="../controls/token-limits.html">token-limits</a>,
-   <a href="../controls/cost-attribution.html">cost-attribution</a>,
-   <a href="../controls/content-safety.html">content-safety</a>,
-   <a href="../controls/semantic-cache.html">semantic-cache</a>.</li>
+</li>
+<li>
+<p><strong>Apply the same four GA policies</strong> — the governance contract is identical:
+<a href="../controls/token-limits.html">token-limits</a>,
+<a href="../controls/cost-attribution.html">cost-attribution</a>,
+<a href="../controls/content-safety.html">content-safety</a>,
+<a href="../controls/semantic-cache.html">semantic-cache</a>.</p>
+</li>
 </ol>
 <h2 id="caveats">Caveats</h2>
 <ul>
 <li><strong>v2-only</strong>: token-limit / cache governance for Anthropic does not exist on Developer
-  or Consumption tiers.</li>
+or Consumption tiers.</li>
 <li>Backend MI auth still follows the
-  <a href="../controls/content-safety.html">content-safety</a> post-deploy pattern where applicable.</li>
+<a href="../controls/content-safety.html">content-safety</a> post-deploy pattern where applicable.</li>
 <li>Prefer the unified doorway so agent code stays on the single OpenAI-shaped contract and
-  the provider switch is an alias + backend change, not a client change.</li>
+the provider switch is an alias + backend change, not a client change.</li>
 </ul>
 <h2 id="verify">Verify</h2>
 <p><code>GET /models</code> lists the new Claude alias; <code>POST /llm/v1/chat/completions</code> targeting that
 alias returns a translated completion, and the four controls (quota, metrics, safety,
 cache) apply to it.</p>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

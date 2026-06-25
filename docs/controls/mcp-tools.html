@@ -52,7 +52,7 @@ tool calls just like model calls.</p>
 <h2 id="how-to-provision">How to provision</h2>
 <ol>
 <li>Run <code>scripts/provision-preview.{sh,ps1}</code> — it walks the preview steps (no stable Bicep
-   type exists yet).</li>
+type exists yet).</li>
 <li>Or in the portal: select the REST API → expose as MCP server. Operations become tools.</li>
 <li>Attach the governance policy (below) at the MCP server scope.</li>
 </ol>
@@ -71,7 +71,7 @@ optional <code>validate-jwt</code>.</p>
 <h2 id="limitations-caveats">Limitations / caveats</h2>
 <ul>
 <li><strong>Governance scope is WHOLE-SERVER, not per-tool.</strong> One policy covers every tool on the
-  server; you cannot rate-limit or gate a single operation independently.</li>
+server; you cannot rate-limit or gate a single operation independently.</li>
 <li><strong>Do NOT access <code>context.Response.Body</code></strong> in MCP policies — it breaks streaming.</li>
 <li>Preview: endpoint shape and management surface may change.</li>
 </ul>
@@ -80,6 +80,7 @@ optional <code>validate-jwt</code>.</p>
 <code>https://&lt;apim&gt;.azure-api.net/&lt;api&gt;-mcp/mcp</code>, supply a team subscription key, and confirm
 the API operations appear as callable tools. See
 <a href="../runbooks/onboard-a-tool.html">runbooks/onboard-a-tool</a>.</p>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

@@ -42,7 +42,7 @@
 <li><strong>azd</strong> (Azure Developer CLI).</li>
 <li>An <strong>Azure subscription</strong> with rights to deploy at subscription scope.</li>
 <li>Quota for <strong>Cognitive Services</strong> (Azure OpenAI + Content Safety) and <strong>APIM</strong> in the
-  target region.</li>
+target region.</li>
 </ul>
 <h2 id="resources-provisioned">Resources provisioned</h2>
 <p>APIM, Azure OpenAI (<code>gpt-4o</code> deployment <code>chat</code> + <code>text-embedding-3-small</code> deployment
@@ -54,9 +54,9 @@ App Insights, and two demo team products/subscriptions: <code>team-research</cod
 <ul>
 <li>Provisions Bicep at <strong>subscription scope</strong> (creates resource group <code>rg-&lt;env&gt;</code>).</li>
 <li>Default tier is <strong>Developer</strong> (~$50/mo, <strong>no SLA</strong>, ~<strong>30–45 min</strong> to provision).
-  Developer supports the entire OpenAI-only showcase including the preview surfaces.</li>
+Developer supports the entire OpenAI-only showcase including the preview surfaces.</li>
 <li>The <strong>postprovision hook runs <code>scripts/provision-preview.*</code></strong> to stand up the preview
-  surfaces (MCP, A2A, unified API) that lack stable Bicep types.</li>
+surfaces (MCP, A2A, unified API) that lack stable Bicep types.</li>
 </ul>
 <h2 id="fallback-no-azd">Fallback (no azd)</h2>
 <pre><code class="language-bash">az deployment sub create \
@@ -90,6 +90,7 @@ Header: api-key: &lt;subscription-key&gt;
 <p>Cognitive Services (OpenAI, Content Safety) and APIM <strong>soft-delete</strong> on deletion.
 Redeploying with the <strong>same names</strong> may require <strong>purging</strong> the soft-deleted resources
 first, or the deploy will fail on name conflict.</p>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

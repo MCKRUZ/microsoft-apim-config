@@ -43,42 +43,46 @@ different tier requirements and a hard tier trade-off.</p>
 <h2 id="decision">Decision</h2>
 <ul>
 <li><strong>Treat reliability as three independent flags</strong>, not one: <code>availabilityZones</code> (top-level
-  <code>zones</code>), <code>multiRegion</code> (<code>additionalLocations</code>), <code>modelFailover</code> (backend circuit breaker +
-  pool). They compose but are enabled separately — <code>modelFailover</code> works on any tier including
-  the Developer seed; the gateway-resilience flags need Premium-class.</li>
+<code>zones</code>), <code>multiRegion</code> (<code>additionalLocations</code>), <code>modelFailover</code> (backend circuit breaker +
+pool). They compose but are enabled separately — <code>modelFailover</code> works on any tier including
+the Developer seed; the gateway-resilience flags need Premium-class.</li>
 <li><strong>Zones + regions are properties of the existing service</strong> → edited into <code>apim.bicep</code>, not a
-  new module (they're create/update on the same resource, not standalone resources).</li>
+new module (they're create/update on the same resource, not standalone resources).</li>
 <li><strong><code>modelFailover</code> folds into <code>llm-api.bicep</code></strong> — the chat backend + pool are created there
-  and the policy is routed through the pool via the same fragment-injection pattern
-  (<code>FAILOVER_BACKEND</code> marker). Keeping the backends with the policy that references them gets
-  the deploy ordering right.</li>
+and the policy is routed through the pool via the same fragment-injection pattern
+(<code>FAILOVER_BACKEND</code> marker). Keeping the backends with the policy that references them gets
+the deploy ordering right.</li>
 <li><strong>Surface the tier trade-off, don't hide it.</strong> Multi-region is Premium-classic-only; the
-  unified doorway/Claude is v2-only; you cannot have both in one instance today. Documented in
-  the runbook and caveats as the load-bearing tier decision, with a recommendation per priority
-  (resilience-first → Premium classic; provider-first → v2).</li>
+unified doorway/Claude is v2-only; you cannot have both in one instance today. Documented in
+the runbook and caveats as the load-bearing tier decision, with a recommendation per priority
+(resilience-first → Premium classic; provider-first → v2).</li>
 </ul>
 <h2 id="honest-constraints">Honest constraints</h2>
 <ul>
 <li><strong>AZ/multi-region need a tier change</strong> — the Developer seed supports neither, so these flags
-  fail on Developer. Added <code>Premium</code> to the allowed SKUs; documented as a precondition (Bicep
-  can't fail-fast on a flag/tier mismatch).</li>
+fail on Developer. Added <code>Premium</code> to the allowed SKUs; documented as a precondition (Bicep
+can't fail-fast on a flag/tier mismatch).</li>
 <li><strong>Token quota counts per region</strong> — <code>multiRegion</code> multiplies the effective monthly cap by the
-  region count. Cross-referenced to caveats §1; the operator must do the math.</li>
+region count. Cross-referenced to caveats §1; the operator must do the math.</li>
 <li><strong>Multi-region + network isolation</strong> needs per-region subnet + public IP in each
-  <code>additionalLocations</code> entry — not auto-derived; flagged validate-before-prod.</li>
+<code>additionalLocations</code> entry — not auto-derived; flagged validate-before-prod.</li>
 <li><strong>One OpenAI account → one pool member.</strong> The circuit breaker is the real single-region win;
-  true active-active needs a second region's backend added to the pool. The pool is built ready
-  for it rather than faking a second member.</li>
+true active-active needs a second region's backend added to the pool. The pool is built ready
+for it rather than faking a second member.</li>
 </ul>
 <h2 id="consequences">Consequences</h2>
 <ul>
 <li><code>dev</code> unchanged (all three flags off). <code>prod</code>/<code>regulated</code> (with a Premium-class SKU) get zone
-  redundancy, multi-region, and the breaker-protected pool; <code>test</code> gets <code>modelFailover</code>.</li>
-<li><code>apim.bicep</code> gains <code>zones</code>/<code>additionalLocations</code>; <code>llm-api.bicep</code> gains the failover backends</li>
+redundancy, multi-region, and the breaker-protected pool; <code>test</code> gets <code>modelFailover</code>.</li>
+<li><code>apim.bicep</code> gains <code>zones</code>/<code>additionalLocations</code>; <code>llm-api.bicep</code> gains the failover backends
+<ul>
 <li>policy injection; <code>llm-governance.xml</code> gains the <code>FAILOVER_BACKEND</code> marker (lint still passes).</li>
-<li>Phase 6 (<code>multiProvider</code>) adds a second provider backend to the same pool / a v2 sidecar,
-  landing the other side of the tier trade-off.</li>
 </ul>
+</li>
+<li>Phase 6 (<code>multiProvider</code>) adds a second provider backend to the same pool / a v2 sidecar,
+landing the other side of the tier trade-off.</li>
+</ul>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

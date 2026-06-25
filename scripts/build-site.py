@@ -15,7 +15,21 @@
 import os
 import re
 import posixpath
-import markdown
+from markdown_it import MarkdownIt
+
+MD = MarkdownIt("commonmark").enable(["table", "strikethrough"])  # CommonMark + GFM tables (no linkify dep)
+
+
+def github_slug(text):
+    t = re.sub(r'<[^>]+>', '', text).replace('&amp;', '&')
+    t = re.sub(r'[^\w\s-]', '', t.lower())
+    return re.sub(r'-+', '-', re.sub(r'\s+', '-', t.strip()))
+
+
+def add_heading_ids(html_str):
+    return re.sub(r'<h([2-6])>(.*?)</h\1>',
+                  lambda m: f'<h{m.group(1)} id="{github_slug(m.group(2))}">{m.group(2)}</h{m.group(1)}>',
+                  html_str, flags=re.DOTALL)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BLOB = 'https://github.com/MCKRUZ/microsoft-apim-config/blob/main/'
@@ -119,7 +133,8 @@ def rewrite_links(html, md_dir):
 
 def extract_mermaid(text, store):
     def repl(m):
-        store.append(m.group(1))
+        # Mermaid 11 rejects "\n" line breaks in labels — use <br/>.
+        store.append(m.group(1).replace('\\n', '<br/>'))
         return f'\n\nMERMAIDBLOCK{len(store) - 1}ENDMERMAID\n\n'
     return re.sub(r'```mermaid\n(.*?)```', repl, text, flags=re.DOTALL)
 
@@ -143,10 +158,10 @@ def convert(md_relpath):
 
     mer_store = []
     text = extract_mermaid(text, mer_store)
-    html = markdown.markdown(
-        text, extensions=['tables', 'fenced_code', 'toc', 'sane_lists', 'attr_list'])
-    # strip the leading <h1> (title already shown in the page header)
-    html = re.sub(r'^<h1[^>]*>.*?</h1>', '', html, count=1, flags=re.DOTALL).lstrip()
+    html = MD.render(text)
+    # strip the leading <h1> (title already shown in the page header), then add anchor ids
+    html = re.sub(r'^<h1[^>]*>.*?</h1>\s*', '', html, count=1, flags=re.DOTALL)
+    html = add_heading_ids(html)
     for i, block in enumerate(mer_store):
         html = html.replace(f'<p>MERMAIDBLOCK{i}ENDMERMAID</p>',
                             f'<div class="mermaid">{block}</div>')

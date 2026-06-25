@@ -49,17 +49,18 @@ governed tools. This is the <strong>agent → tool</strong> surface — see
 </li>
 <li>
 <p><strong>Expose it as an MCP server.</strong> Run:</p>
-</li>
-</ol>
-<p><code>bash
-   scripts/provision-preview.sh    # or .ps1</code></p>
+<pre><code class="language-bash">scripts/provision-preview.sh    # or .ps1
+</code></pre>
 <p>Or, in the portal: select the API → expose as MCP server. Each API operation becomes
-   an MCP tool. The endpoint is:</p>
-<p><code>https://&lt;apim&gt;.azure-api.net/&lt;api&gt;-mcp/mcp</code></p>
+an MCP tool. The endpoint is:</p>
+<pre><code>https://&lt;apim&gt;.azure-api.net/&lt;api&gt;-mcp/mcp
+</code></pre>
 <p>Transport: streamable HTTP at <code>/mcp</code>.</p>
-<ol start="3">
-<li><strong>Attach governance.</strong> Apply <code>infra/policies/mcp-governance.xml</code>
-   (<code>rate-limit-by-key</code> + agent-id trace, optional <code>validate-jwt</code>).</li>
+</li>
+<li>
+<p><strong>Attach governance.</strong> Apply <code>infra/policies/mcp-governance.xml</code>
+(<code>rate-limit-by-key</code> + agent-id trace, optional <code>validate-jwt</code>).</p>
+</li>
 </ol>
 <h2 id="whole-server-scope-caveat">Whole-server scope caveat</h2>
 <p>Governance applies to the <strong>WHOLE MCP server, not per tool</strong>. One policy covers every
@@ -72,8 +73,9 @@ you need different limits per tool, split into separate MCP servers.</p>
 <li>Add the server URL <code>https://&lt;apim&gt;.azure-api.net/&lt;api&gt;-mcp/mcp</code>.</li>
 <li>Supply a team subscription key.</li>
 <li>Confirm the API operations appear as callable tools and that calls are rate-limited
-   per the policy.</li>
+per the policy.</li>
 </ol>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

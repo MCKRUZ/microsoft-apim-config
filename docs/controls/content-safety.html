@@ -56,45 +56,46 @@ hidden inside tool output or RAG content that an agent is about to act on.</p>
 &lt;/llm-content-safety&gt;
 </code></pre>
 <ul>
-<li><code>shield-prompt="true"</code> — Prompt Shields catches jailbreak <strong>and</strong> indirect injection
-  hidden in tool/RAG content.</li>
+<li><code>shield-prompt=&quot;true&quot;</code> — Prompt Shields catches jailbreak <strong>and</strong> indirect injection
+hidden in tool/RAG content.</li>
 <li>Categories Hate / Violence / SelfHarm / Sexual: severity <code>0–3</code> passes, <code>4–7</code> blocks
-  when <code>threshold="4"</code>.</li>
-<li><code>enforce-on-completions="true"</code> screens the response too.</li>
+when <code>threshold=&quot;4&quot;</code>.</li>
+<li><code>enforce-on-completions=&quot;true&quot;</code> screens the response too.</li>
 <li>Returns <strong><code>403</code></strong> when blocked.</li>
 </ul>
 <h2 id="how-its-wired-in-this-repo">How it's wired in this repo</h2>
 <ul>
 <li>Policy: <code>infra/policies/llm-governance.xml</code>.</li>
 <li>Azure AI Content Safety resource provisioned in
-  <code>infra/modules/content-safety.bicep</code>; <code>disableLocalAuth=true</code>.</li>
+<code>infra/modules/content-safety.bicep</code>; <code>disableLocalAuth=true</code>.</li>
 <li>APIM's system-assigned MI gets <strong>Cognitive Services User</strong> on the account
-  (<code>infra/modules/rbac.bicep</code>).</li>
+(<code>infra/modules/rbac.bicep</code>).</li>
 <li><strong>Known IaC gap:</strong> the content-safety backend's managed-identity auth is <strong>not
-  expressible</strong> in the ARM/Bicep backend schema (even <code>2025-09-01-preview</code> <code>credentials</code>
-  has no <code>managedIdentity</code> field). So the backend is created <strong>URL-only</strong> in Bicep and MI
-  auth is applied post-deploy by <code>scripts/configure-backend-auth.{sh,ps1}</code> — or one portal
-  toggle: <em>Backends → content-safety-backend → Authorization credentials → Managed
-  identity → System assigned → Resource ID <code>https://cognitiveservices.azure.com</code></em>.</li>
+expressible</strong> in the ARM/Bicep backend schema (even <code>2025-09-01-preview</code> <code>credentials</code>
+has no <code>managedIdentity</code> field). So the backend is created <strong>URL-only</strong> in Bicep and MI
+auth is applied post-deploy by <code>scripts/configure-backend-auth.{sh,ps1}</code> — or one portal
+toggle: <em>Backends → content-safety-backend → Authorization credentials → Managed
+identity → System assigned → Resource ID <code>https://cognitiveservices.azure.com</code></em>.</li>
 </ul>
 <h2 id="how-to-verify">How to verify</h2>
 <ol>
 <li>Run <code>scripts/smoke-test.{sh,ps1}</code> with a benign prompt → <code>200</code>.</li>
 <li>Send a known jailbreak / disallowed prompt → expect <strong><code>403</code></strong>.</li>
 <li>If you get a <code>401/403</code> from the backend itself, the MI auth step was skipped — run
-   <code>scripts/configure-backend-auth.{sh,ps1}</code>.</li>
+<code>scripts/configure-backend-auth.{sh,ps1}</code>.</li>
 </ol>
 <h2 id="caveats">Caveats</h2>
 <ul>
 <li><strong>Streaming</strong>: for streamed responses the policy buffers a sliding window and <strong>stops
-  forwarding events</strong> on a violation — it does <strong>not</strong> return <code>403</code>. Clients must handle a
-  truncated stream.</li>
+forwarding events</strong> on a violation — it does <strong>not</strong> return <code>403</code>. Clients must handle a
+truncated stream.</li>
 <li>Tuned for a <strong>limited set of languages</strong>; can misfire on others.</li>
 <li>Requires a <strong>separate Azure AI Content Safety resource</strong>.</li>
 <li>The policy itself works on all tiers (incl. Consumption), but this golden copy requires
-  <strong>Developer or v2</strong> because the co-located <code>llm-token-limit</code> spend cap is unavailable on
-  Consumption — so the full control set never runs there.</li>
+<strong>Developer or v2</strong> because the co-located <code>llm-token-limit</code> spend cap is unavailable on
+Consumption — so the full control set never runs there.</li>
 </ul>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

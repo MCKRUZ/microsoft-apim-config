@@ -69,6 +69,7 @@ az deployment sub create -l eastus2 -f infra/main.bicep \
 <li>From outside the VNet, the OpenAI data-plane endpoint should now reject (no public route).</li>
 <li><code>scripts/smoke-test.*</code> run from a host with VNet line-of-sight (or through the gateway) should still pass — proving APIM reaches the backends privately while the public path is gone.</li>
 </ul>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

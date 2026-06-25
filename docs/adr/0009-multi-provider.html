@@ -43,39 +43,43 @@ unified model API and Anthropic governance are <strong>preview and v2-only</stro
 on the opposite side of the §3 tier trade-off from the multi-region built in Phase 5.</p>
 <h2 id="decision">Decision</h2>
 <ul>
-<li><strong>Split by maturity, as established in <a href="0003-preview-via-scripts.html">ADR-0003</a>.</strong></li>
+<li><strong>Split by maturity, as established in <a href="0003-preview-via-scripts.html">ADR-0003</a>.</strong>
+<ul>
 <li><strong>GA → Bicep:</strong> wire the long-declared <code>useKeyVault</code> flag now (<code>modules/keyvault.bicep</code>) —
-    Key Vault + APIM MI granted <em>Key Vault Secrets User</em>. This is the secret home a non-Azure
-    provider key needs; Phase 6 is its natural trigger (every Azure call is keyless via MI, so
-    a third-party key is the first real secret).</li>
+Key Vault + APIM MI granted <em>Key Vault Secrets User</em>. This is the secret home a non-Azure
+provider key needs; Phase 6 is its natural trigger (every Azure call is keyless via MI, so
+a third-party key is the first real secret).</li>
 <li><strong>Preview → script + docs:</strong> the unified doorway + Claude backend + Anthropic governance go
-    in <code>scripts/provision-preview.*</code> (extended) and the runbook. <code>multiProvider</code> is informational
-    at the Bicep layer — it sets a <code>MULTI_PROVIDER_INTENDED</code> output the script reads.</li>
+in <code>scripts/provision-preview.*</code> (extended) and the runbook. <code>multiProvider</code> is informational
+at the Bicep layer — it sets a <code>MULTI_PROVIDER_INTENDED</code> output the script reads.</li>
+</ul>
+</li>
 <li><strong>Never put the provider secret in Bicep.</strong> Key Vault holds it; APIM reads it via a
-  KV-reference named value created post-deploy (APIM validates the reference on create, so the
-  secret must exist first — an ordering reason the named value can't be pure Bicep anyway).</li>
+KV-reference named value created post-deploy (APIM validates the reference on create, so the
+secret must exist first — an ordering reason the named value can't be pure Bicep anyway).</li>
 <li><strong>Don't fake cross-provider failover.</strong> The Phase-5 pool load-balances same-format backends;
-  OpenAI↔Anthropic needs the doorway's translation. Documented, not pooled.</li>
+OpenAI↔Anthropic needs the doorway's translation. Documented, not pooled.</li>
 </ul>
 <h2 id="honest-constraints">Honest constraints</h2>
 <ul>
 <li><strong>multiProvider is v2-only and excludes multi-region</strong> in a single instance (§3). For both,
-  run separate instances (Premium classic for multi-region, v2/sidecar for the doorway) behind
-  one edge. Stated in the runbook + caveats, with the two-instance topology.</li>
+run separate instances (Premium classic for multi-region, v2/sidecar for the doorway) behind
+one edge. Stated in the runbook + caveats, with the two-instance topology.</li>
 <li><strong>Preview surfaces move</strong> — the doorway management APIs lack stable Bicep types; the script is
-  guided (portal steps + <code>az</code> where stable) and will need updates as the surface stabilizes.</li>
+guided (portal steps + <code>az</code> where stable) and will need updates as the surface stabilizes.</li>
 <li><strong>KV-reference ordering</strong>: secret-before-named-value; handled post-deploy.</li>
 </ul>
 <h2 id="consequences">Consequences</h2>
 <ul>
 <li><code>useKeyVault</code> finally does something (test/prod/regulated): a vault + APIM MI access, ready for
-  any third-party credential, not just Anthropic.</li>
+any third-party credential, not just Anthropic.</li>
 <li><code>multiProvider</code> reaches GA-in-Bicep the day Microsoft ships stable types — at which point the
-  Anthropic backend + KV-reference named value migrate from the script into <code>infra/</code> and this ADR
-  updates, exactly as ADR-0003 anticipates.</li>
+Anthropic backend + KV-reference named value migrate from the script into <code>infra/</code> and this ADR
+updates, exactly as ADR-0003 anticipates.</li>
 <li>Rollout complete: Phases 0–6 done. The remaining frontier is upstream (v2 multi-region), not in
-  this repo's control.</li>
+this repo's control.</li>
 </ul>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·

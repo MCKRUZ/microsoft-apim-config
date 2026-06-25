@@ -104,42 +104,120 @@ on/off · <strong>Declared (future)</strong> = forward contract, not yet built.<
 <p>Composed in <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/infra/modules/llm-api.bicep"><code>llm-api.bicep</code></a> into the markers in
 <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/infra/policies/llm-governance.xml"><code>llm-governance.xml</code></a>. All default <strong>on</strong>, so the
 composed policy reproduces the always-on seed; turn one <strong>off</strong> and its element is gone (no dead
-policy left behind).
-| Flag | Element / attribute |
-|---|---|
-| <code>tokenRateLimit</code> | <code>llm-token-limit</code> <code>tokens-per-minute</code> |
-| <code>tokenQuota</code> | <code>llm-token-limit</code> <code>token-quota</code> (+ period) |
-| <code>preflightReject</code> | <code>estimate-prompt-tokens</code> |
-| <code>costAttribution</code> | <code>llm-emit-token-metric</code> (whole element) |
-| <code>contentSafetyPrompt</code> | <code>llm-content-safety</code> <code>shield-prompt</code> |
-| <code>contentSafetyResponse</code> | <code>enforce-on-completions</code> |
-| <code>semanticCache</code> | <code>llm-semantic-cache-lookup</code> + <code>…-store</code> |</p>
+policy left behind).</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Element / attribute</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tokenRateLimit</code></td>
+<td><code>llm-token-limit</code> <code>tokens-per-minute</code></td>
+</tr>
+<tr>
+<td><code>tokenQuota</code></td>
+<td><code>llm-token-limit</code> <code>token-quota</code> (+ period)</td>
+</tr>
+<tr>
+<td><code>preflightReject</code></td>
+<td><code>estimate-prompt-tokens</code></td>
+</tr>
+<tr>
+<td><code>costAttribution</code></td>
+<td><code>llm-emit-token-metric</code> (whole element)</td>
+</tr>
+<tr>
+<td><code>contentSafetyPrompt</code></td>
+<td><code>llm-content-safety</code> <code>shield-prompt</code></td>
+</tr>
+<tr>
+<td><code>contentSafetyResponse</code></td>
+<td><code>enforce-on-completions</code></td>
+</tr>
+<tr>
+<td><code>semanticCache</code></td>
+<td><code>llm-semantic-cache-lookup</code> + <code>…-store</code></td>
+</tr>
+</tbody>
+</table>
 <h2 id="informational-drives-a-script-or-ci-step-no-infra-gate-4">Informational — drives a script or CI step, no infra gate (4)</h2>
-<p>By design these do not gate Bicep; CI/CD and preview surfaces live outside the deployment.
-| Flag | Reads it / acts on it |
-|---|---|
-| <code>pipelineGuardrails</code> | declares an env is change-controlled; the pipeline is the <code>.github/workflows/</code> + branch/env protection (<a href="../runbooks/ci-cd-pipeline.html">runbook</a>) |
-| <code>multiProvider</code> | <code>MULTI_PROVIDER_INTENDED</code> output → <code>provision-preview.*</code> prints the Claude/doorway flow (preview, v2-only) |
-| <code>mcpTools</code> | preview MCP-server surface, stood up by <code>provision-preview.*</code> (whole-server scope) |
-| <code>a2aAgents</code> | preview A2A surface, stood up by <code>provision-preview.*</code> |</p>
+<p>By design these do not gate Bicep; CI/CD and preview surfaces live outside the deployment.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Reads it / acts on it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pipelineGuardrails</code></td>
+<td>declares an env is change-controlled; the pipeline is the <code>.github/workflows/</code> + branch/env protection (<a href="../runbooks/ci-cd-pipeline.html">runbook</a>)</td>
+</tr>
+<tr>
+<td><code>multiProvider</code></td>
+<td><code>MULTI_PROVIDER_INTENDED</code> output → <code>provision-preview.*</code> prints the Claude/doorway flow (preview, v2-only)</td>
+</tr>
+<tr>
+<td><code>mcpTools</code></td>
+<td>preview MCP-server surface, stood up by <code>provision-preview.*</code> (whole-server scope)</td>
+</tr>
+<tr>
+<td><code>a2aAgents</code></td>
+<td>preview A2A surface, stood up by <code>provision-preview.*</code></td>
+</tr>
+</tbody>
+</table>
 <h2 id="documented-control-real-needs-external-config-2">Documented control — real, needs external config (2)</h2>
-<p>Honest about the gap: these are not a clean Bicep on/off.
-| Flag | Why, and the wiring path |
-|---|---|
-| <code>customBlocklists</code> | Needs a <strong>Content Safety blocklist</strong> created out-of-band + its id in a named value; then add a <code>&lt;blocklists&gt;</code> child to the composed <code>llm-content-safety</code>. Not injected by default (an empty blocklist id errors at runtime). |
-| <code>promptLogging</code> | Governs <strong>LLM message-body</strong> capture, which is a per-API LLM-logging / resource-log setting, <em>not</em> a policy element. The seed logs token metadata, never bodies (the safe default); turn body capture on deliberately, with <code>dataMasking</code> (<a href="../caveats.html">caveats §11</a>). |</p>
+<p>Honest about the gap: these are not a clean Bicep on/off.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Why, and the wiring path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>customBlocklists</code></td>
+<td>Needs a <strong>Content Safety blocklist</strong> created out-of-band + its id in a named value; then add a <code>&lt;blocklists&gt;</code> child to the composed <code>llm-content-safety</code>. Not injected by default (an empty blocklist id errors at runtime).</td>
+</tr>
+<tr>
+<td><code>promptLogging</code></td>
+<td>Governs <strong>LLM message-body</strong> capture, which is a per-API LLM-logging / resource-log setting, <em>not</em> a policy element. The seed logs token metadata, never bodies (the safe default); turn body capture on deliberately, with <code>dataMasking</code> (<a href="../caveats.html">caveats §11</a>).</td>
+</tr>
+</tbody>
+</table>
 <h2 id="declared-future-forward-contract-not-built-2">Declared (future) — forward contract, not built (2)</h2>
-<p>Present in the profile so the contract is complete; no implementation yet.
-| Flag | Planned |
-|---|---|
-| <code>edgeWaf</code> | Azure Front Door Premium + WAF (<code>modules/edge.bicep</code>) — Phase 1b |
-| <code>selfHostedGateway</code> | self-hosted gateway resource for hybrid/on-prem/multi-cloud |</p>
+<p>Present in the profile so the contract is complete; no implementation yet.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Planned</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>edgeWaf</code></td>
+<td>Azure Front Door Premium + WAF (<code>modules/edge.bicep</code>) — Phase 1b</td>
+</tr>
+<tr>
+<td><code>selfHostedGateway</code></td>
+<td>self-hosted gateway resource for hybrid/on-prem/multi-cloud</td>
+</tr>
+</tbody>
+</table>
 <h2 id="summary">Summary</h2>
 <p>24 flags: <strong>16 wired</strong> (9 Bicep-gated + 7 policy-composed), <strong>4 informational</strong>, <strong>2 documented
 controls</strong>, <strong>2 declared-future</strong>. Nothing is silently inert. The default <code>dev</code> profile turns on
 every GA control (reproducing the original seed); <code>regulated</code> is the strict end (cache + prompt
 bodies off). The two declared-future flags and the two documented controls are the only places
-"toggleable" is aspirational rather than literal — called out here rather than hidden.</p>
+&quot;toggleable&quot; is aspirational rather than literal — called out here rather than hidden.</p>
+
 </div></main>
 <footer class="foot"><div class="wrap">
   MCKRUZ · APIM Agentic Governance Golden Copy ·
