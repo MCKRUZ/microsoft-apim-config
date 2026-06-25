@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "${AZURE_ENV_NAME=apim-gov}"
+    },
+    "location": {
+      "value": "${AZURE_LOCATION=eastus2}"
+    },
+    "apimPublisherEmail": {
+      "value": "${APIM_PUBLISHER_EMAIL=admin@example.com}"
+    },
+    "apimPublisherName": {
+      "value": "${APIM_PUBLISHER_NAME=AI Governance Golden Copy}"
+    },
+    "apimSkuName": {
+      "value": "${APIM_SKU=Developer}"
+    },
+    "tokensPerMinute": {
+      "value": "${TOKENS_PER_MINUTE=1000}"
+    },
+    "tokenQuota": {
+      "value": "${TOKEN_QUOTA=1000000}"
+    },
+    "cacheScoreThreshold": {
+      "value": "${CACHE_SCORE_THRESHOLD=0.05}"
+    }
+  }
+}

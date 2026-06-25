@@ -1,0 +1,62 @@
+<!--
+  ============================================================================
+  MCP SERVER GOVERNANCE POLICY   (PREVIEW surface: agent -> tool)
+  ============================================================================
+  Applied at the MCP server scope. NOTE the article's caveat, confirmed in docs:
+  MCP governance is WHOLE-SERVER, not per-tool — these policies apply to every
+  operation/tool exposed by the server, you cannot yet scope per individual tool.
+
+  Two hard constraints from the docs:
+    - Do NOT read context.Response.Body in MCP policies. It forces response
+      buffering and breaks the streamable-HTTP transport MCP requires. (So no
+      llm-content-safety on completions here, and no response-body inspection.)
+    - Global (All APIs) policies evaluate before this MCP-server scope.
+
+  This policy demonstrates the governance the gateway adds to tool traffic:
+    - JWT validation (identity)   - who is allowed to use the tools
+    - rate-limit-by-key           - stop a runaway agent hammering the tools
+    - agent-id trace              - audit record of which agent called
+  Content-safety on the REQUEST is safe (no response-body access) and screens
+  poisoned tool arguments; enable by uncommenting once a Content Safety backend
+  is wired (see llm-governance.xml for the pattern).
+  ============================================================================
+-->
+<policies>
+    <inbound>
+        <base />
+
+        <!-- Identity: require a valid Entra ID token to use any tool on this server.
+             Replace {{entra-tenant-id}} / {{mcp-audience}} named values for your tenant.
+             Commented by default so the smoke test can call with a subscription key only;
+             turn on for production tool governance. -->
+        <!--
+        <validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized: valid Entra ID token required to call MCP tools.">
+            <openid-config url="https://login.microsoftonline.com/{{entra-tenant-id}}/v2.0/.well-known/openid-configuration" />
+            <audiences>
+                <audience>{{mcp-audience}}</audience>
+            </audiences>
+        </validate-jwt>
+        -->
+
+        <!-- Stop a runaway agent: cap tool calls per caller. -->
+        <rate-limit-by-key
+            calls="30"
+            renewal-period="60"
+            counter-key="@(context.Subscription?.Id ?? context.Request.IpAddress)"
+            remaining-calls-header-name="x-ratelimit-remaining-calls" />
+
+        <!-- Audit record: trace which agent invoked the tool (shows in APIM trace + logs). -->
+        <trace source="mcp-governance" severity="information">
+            <message>@($"MCP tool call agent={context.Request.Headers.GetValueOrDefault("x-agent-id","unspecified")} sub={context.Subscription?.Name ?? "anonymous"} op={context.Operation.Name}")</message>
+        </trace>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

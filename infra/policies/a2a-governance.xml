@@ -1,0 +1,59 @@
+<!--
+  ============================================================================
+  A2A AGENT API GOVERNANCE POLICY   (PREVIEW surface: agent -> agent)
+  ============================================================================
+  Applied at the A2A agent API scope. The A2A agent API mediates JSON-RPC runtime
+  operations to a backend agent and re-projects the agent card through APIM.
+
+  Docs constraints honoured here:
+    - JSON-RPC-based A2A agents only.
+    - Deserialization of outgoing RESPONSE bodies isn't supported -> do not touch
+      the response body. Governance lives on the inbound (request) side.
+    - When App Insights is enabled, APIM auto-emits OTel GenAI attributes
+      gen_ai.agent.id / gen_ai.agent.name for the hand-off — that is the audit
+      record for agent-to-agent traffic.
+    - Global (All APIs) policies evaluate before this A2A scope.
+
+  This policy demonstrates governing the hand-off itself:
+    - rate-limit-by-key   - bound how fast one agent can delegate to another
+    - trace               - record the delegating caller
+    - (optional) validate-jwt for caller identity — uncomment for production
+  ============================================================================
+-->
+<policies>
+    <inbound>
+        <base />
+
+        <!-- Optional caller identity for agent-to-agent calls. Uncomment for production. -->
+        <!--
+        <validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized: valid token required for agent-to-agent calls.">
+            <openid-config url="https://login.microsoftonline.com/{{entra-tenant-id}}/v2.0/.well-known/openid-configuration" />
+            <audiences>
+                <audience>{{a2a-audience}}</audience>
+            </audiences>
+        </validate-jwt>
+        -->
+
+        <!-- Bound the hand-off rate per delegating caller. -->
+        <rate-limit-by-key
+            calls="60"
+            renewal-period="60"
+            counter-key="@(context.Subscription?.Id ?? context.Request.IpAddress)"
+            remaining-calls-header-name="x-ratelimit-remaining-calls" />
+
+        <!-- Audit the delegation. gen_ai.agent.id/name are added automatically by APIM
+             to App Insights traces; this adds the delegating subscription for correlation. -->
+        <trace source="a2a-governance" severity="information">
+            <message>@($"A2A delegation from sub={context.Subscription?.Name ?? "anonymous"} ip={context.Request.IpAddress}")</message>
+        </trace>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

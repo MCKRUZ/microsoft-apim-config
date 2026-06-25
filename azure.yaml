@@ -1,0 +1,31 @@
+# Azure Developer CLI (azd) configuration for the APIM agentic-governance golden copy.
+# `azd up` provisions the GA core (Bicep) then runs the preview-provisioning hook.
+# Plain `az deployment sub create` is documented as a fallback in docs/runbooks/deploy.md.
+#
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+name: microsoft-apim-config
+metadata:
+  template: apim-agentic-governance-golden-copy@1.0.0
+
+# This template has no application services to build/deploy — it is pure governance
+# infrastructure. All resources are defined in ./infra and provisioned by azd.
+infra:
+  provider: bicep
+  path: infra
+  module: main
+
+hooks:
+  # After the GA core is provisioned, stand up the PREVIEW agent surfaces
+  # (MCP server, A2A agent API, unified model API) via az/REST, which lack stable
+  # Bicep resource types today. See docs/adr/0003-preview-via-scripts.md.
+  postprovision:
+    posix:
+      shell: sh
+      run: ./scripts/provision-preview.sh
+      interactive: true
+      continueOnError: true
+    windows:
+      shell: pwsh
+      run: ./scripts/provision-preview.ps1
+      interactive: true
+      continueOnError: true

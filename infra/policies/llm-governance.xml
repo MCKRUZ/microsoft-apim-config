@@ -1,0 +1,106 @@
+<!--
+  ============================================================================
+  LLM GOVERNANCE POLICY  -  Azure OpenAI API scope
+  ============================================================================
+  This is the heart of the "golden copy": the four GA AI-gateway controls applied
+  as a single, ordered policy on the governed LLM API.
+
+  IMPORTANT — element order is significant. Azure API Management requires the
+  AI-gateway policy elements to appear in the documented order; reordering them
+  causes a policy validation error. The order below is also the order the portal
+  "Import language model API" wizard emits.
+
+  Inbound evaluation order and rationale:
+    1. llm-token-limit         -> hard spend cap. Pre-flight prompt-token estimation
+                                  rejects over-budget requests BEFORE they reach the
+                                  model, so a runaway agent piles up against the gate,
+                                  not against your invoice. 429 on rate, 403 on quota.
+    2. llm-emit-token-metric   -> per-team / per-app cost attribution into App Insights.
+    3. llm-content-safety      -> Prompt Shields. Screens for jailbreak (shield-prompt)
+                                  AND indirect prompt-injection hidden in tool/RAG content,
+                                  then the harm categories. Blocks (403) before the model.
+    4. llm-semantic-cache-lookup -> placed LAST inbound on purpose: the spend cap, cost
+                                  attribution, and safety screen always evaluate the
+                                  incoming prompt even on a cache hit. A hit then
+                                  short-circuits the backend call (token savings).
+
+  Outbound:
+    - llm-semantic-cache-store -> stores the completion for future semantically-similar
+                                  prompts.
+
+  Named values (set by infra/modules/named-values.bicep) parameterise the caps so the
+  same policy serves every tier/team without edits:
+    {{tokens-per-minute}} {{token-quota}} {{token-quota-period}} {{cache-score-threshold}}
+  Backend ids ('content-safety-backend', 'embeddings-backend') are created in
+  infra/modules/llm-api.bicep.
+  ============================================================================
+-->
+<policies>
+    <inbound>
+        <base />
+
+        <!-- Keyless backend auth: attach an AAD bearer token for the Azure OpenAI data
+             plane using APIM's managed identity (granted "Cognitive Services OpenAI User"
+             in rbac.bicep). No API keys anywhere. The API's serviceUrl points at the
+             Azure OpenAI endpoint; this just supplies the Authorization header. -->
+        <authentication-managed-identity resource="https://cognitiveservices.azure.com" />
+
+        <!-- (1) Spend cap: per-minute rate limit + monthly token quota, keyed by the
+                 subscription = team/app identity. estimate-prompt-tokens="true" turns away
+                 oversized prompts before they bill the backend. -->
+        <llm-token-limit
+            counter-key="@(context.Subscription?.Id ?? "anonymous")"
+            tokens-per-minute="{{tokens-per-minute}}"
+            token-quota="{{token-quota}}"
+            token-quota-period="{{token-quota-period}}"
+            estimate-prompt-tokens="true"
+            remaining-tokens-header-name="x-ratelimit-remaining-tokens"
+            remaining-quota-tokens-header-name="x-quota-remaining-tokens"
+            tokens-consumed-header-name="x-tokens-consumed" />
+
+        <!-- (2) Cost attribution: emit token metrics to Application Insights with the
+                 dimensions finance/platform actually slice by. Max 5 custom dimensions. -->
+        <llm-emit-token-metric namespace="ai-governance">
+            <dimension name="Subscription" value="@(context.Subscription?.Name ?? "anonymous")" />
+            <dimension name="Product" value="@(context.Product?.Name ?? "none")" />
+            <dimension name="API" value="@(context.Api.Name)" />
+            <dimension name="Client IP" value="@(context.Request.IpAddress)" />
+            <dimension name="Agent ID" value="@(context.Request.Headers.GetValueOrDefault("x-agent-id", "unspecified"))" />
+        </llm-emit-token-metric>
+
+        <!-- (3) Content safety / Prompt Shields: jailbreak + indirect injection + harm
+                 categories. enforce-on-completions="true" extends the same screen to the
+                 model's answer on the way back out. Thresholds 0-3 pass, 4-7 block. -->
+        <llm-content-safety backend-id="content-safety-backend" shield-prompt="true" enforce-on-completions="true">
+            <categories output-type="EightSeverityLevels">
+                <category name="Hate" threshold="4" />
+                <category name="Violence" threshold="4" />
+                <category name="SelfHarm" threshold="4" />
+                <category name="Sexual" threshold="4" />
+            </categories>
+        </llm-content-safety>
+
+        <!-- (4) Semantic cache lookup: return a cached completion for a semantically
+                 similar prompt. score-threshold tight by default (lower = stricter match).
+                 vary-by subscription so teams don't read each other's cached answers. -->
+        <llm-semantic-cache-lookup
+            score-threshold="{{cache-score-threshold}}"
+            embeddings-backend-id="embeddings-backend"
+            embeddings-backend-auth="system-assigned"
+            ignore-system-messages="true"
+            max-message-count="10">
+            <vary-by>@(context.Subscription?.Id ?? "anonymous")</vary-by>
+        </llm-semantic-cache-lookup>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+        <!-- Store the completion for future semantically-similar prompts (TTL 1h). -->
+        <llm-semantic-cache-store duration="3600" />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

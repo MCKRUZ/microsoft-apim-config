@@ -1,0 +1,24 @@
+# Azure Developer CLI
+.azure/
+
+# Environment / secrets — never commit
+*.env
+.env.*
+*.local.json
+local.settings.json
+
+# Bicep build artifacts
+*.arm.json
+main.json
+**/*.bicep.json
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Smoke-test scratch output
+scripts/.out/
+*.tmp
