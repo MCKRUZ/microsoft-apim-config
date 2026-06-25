@@ -35,7 +35,7 @@
   <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/runbooks/network-isolation.md">edit this page on GitHub ↗</a></p>
 </div></header>
 <main class="content"><div class="wrap">
-<p>Turns the chokepoint from a convention into an enforced boundary: backends lose their public path, and APIM reaches them privately. This is the <code>networkIsolation</code> flag.</p>
+<p>Locks the AI backends (Azure OpenAI, Content Safety, Redis) so they have no public internet address at all — the only thing that can reach them is the API gateway (Azure API Management, &quot;APIM&quot;), over a private network. This closes the &quot;someone bypasses the gateway&quot; risk. It's the <code>networkIsolation</code> flag.</p>
 <h2 id="what-it-deploys-when-on">What it deploys (when on)</h2>
 <ul>
 <li>A <strong>VNet</strong> (<code>modules/network.bicep</code>) with an APIM subnet (classic injection: no delegation) and a private-endpoints subnet, each with an NSG.</li>

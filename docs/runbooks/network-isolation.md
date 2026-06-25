@@ -1,6 +1,6 @@
 # Runbook — network isolation (Phase 1)
 
-Turns the chokepoint from a convention into an enforced boundary: backends lose their public path, and APIM reaches them privately. This is the `networkIsolation` flag.
+Locks the AI backends (Azure OpenAI, Content Safety, Redis) so they have no public internet address at all — the only thing that can reach them is the API gateway (Azure API Management, "APIM"), over a private network. This closes the "someone bypasses the gateway" risk. It's the `networkIsolation` flag.
 
 ## What it deploys (when on)
 - A **VNet** (`modules/network.bicep`) with an APIM subnet (classic injection: no delegation) and a private-endpoints subnet, each with an NSG.

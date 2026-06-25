@@ -2,14 +2,14 @@
 
 Every claim here is a real constraint verified against Microsoft Learn (June 2026), not a hedge. A golden copy that hides these would be lying. Read this before you bet production governance on the gateway.
 
-## 1. Token quotas count per gateway region, not globally
-The newer `llm-token-limit` token quota is enforced **per gateway instance/region**. Run the gateway in three regions and a "1,000,000 tokens/month" cap is really 1M *per region* — 3M total. (The older request-counting limits DID sum across regions; this one does not.) A company-wide budget needs per-region math, or a single-region gateway. Single-region is the default here.
+## 1. The monthly budget cap counts per region, not company-wide
+The monthly token-budget cap is counted **separately in each region** the gateway runs in. Run the gateway in three regions and a "1,000,000 tokens/month" cap is really 1M *per region* — 3M total. (The older request-counting limits DID sum across regions; this one does not.) A company-wide budget needs per-region math, or a single-region gateway. Single-region is the default here.
 
 ## 2. The Consumption tier has no spend controls
 `llm-token-limit` and load-balancing are **not available on the Consumption tier**. This repo defaults to **Developer** (cheapest tier that supports the full OpenAI-only showcase) and documents **StandardV2** as the production target. Never put this governance on Consumption — the spend cap simply won't be there.
 
-## 3. Content-safety backend managed-identity auth is a known IaC gap
-The `llm-content-safety` policy calls the `content-safety-backend` entity as a black box, so the APIM managed identity must live **on the backend entity**. That is **not expressible in the ARM/Bicep backend schema** — verified: even `Microsoft.ApiManagement/service/backends@2025-09-01-preview` `credentials` exposes only `authorization`/`header`/`query`/`certificate`, no managed identity. So:
+## 3. One safety check needs a one-time manual step after deploy
+The content-safety check signs in using the gateway's own built-in Azure identity (no password). Azure's deployment templates (ARM/Bicep) can't set that sign-in up automatically for this particular connection — verified against the current schema. So it's a one-time manual step:
 - Bicep creates the backend **URL-only** (`infra/modules/llm-api.bicep`).
 - MI auth is applied **post-deploy** by `scripts/configure-backend-auth.{sh,ps1}`, or by one portal toggle: *Backends → content-safety-backend → Authorization credentials → Managed identity → System assigned → Resource ID `https://cognitiveservices.azure.com`*.
 - Until that step runs, content-safety screening returns errors. The smoke test flags this explicitly.
@@ -30,8 +30,8 @@ Azure Managed Redis can only enable the **RediSearch** module when the cache is 
 ## 7. MCP governance is whole-server, not per-tool
 Policies on an MCP server apply to **every** operation/tool the server exposes — you cannot yet scope a policy to one individual tool. Also: never read `context.Response.Body` in an MCP policy; it forces buffering and breaks the streamable-HTTP transport MCP needs.
 
-## 8. A2A is JSON-RPC only, request-side governance only
-The A2A agent API supports **JSON-RPC** agents only, and does **not** support deserializing outgoing response bodies — so governance lives on the inbound (request) side. Audit comes from the auto-emitted OTel attributes `gen_ai.agent.id` / `gen_ai.agent.name`.
+## 8. Agent-to-agent governance covers requests, not replies
+For agent-to-agent (A2A) calls, we can enforce rules on what one agent **sends** to another, but not on the reply coming back — a current platform limit. We still get an audit trail: every call is automatically tagged with the calling agent's ID and name (a standard telemetry tag). A2A also supports only one message format (JSON-RPC).
 
 ## 9. Governing Claude requires a v2 tier
 Anthropic Messages support for `llm-token-limit` / semantic cache, and the unified doorway's OpenAI⇄Anthropic translation, require an **APIM v2 tier**. This repo is OpenAI-only by design and runs on Developer; adding Claude is a tier upgrade + a backend add — see [runbooks/add-claude.md](runbooks/add-claude.md). It is not a rearchitecture, but it is not free either.
@@ -40,10 +40,10 @@ Anthropic Messages support for `llm-token-limit` / semantic cache, and the unifi
 MCP, A2A, and the unified model API are **preview**. Their management APIs are still moving and lack stable ARM/Bicep types, which is why they're provisioned via `scripts/provision-preview.*` rather than Bicep ([ADR-0003](adr/0003-preview-via-scripts.md)). Treat them as a direction, not a finished contract; expect to update the scripts as the surfaces stabilise.
 
 ## 11. Data masking covers headers and query params — not prompt/completion bodies
-APIM diagnostic **data masking can only Hide/Mask headers and URL query parameters** — verified against the diagnostic schema across every API version. It **cannot** redact PII inside the LLM prompt or completion **body**. So the `dataMasking` flag does the thing it actually can: it Hides the `api-key`/`subscription-key`/`Authorization` secret-leak vector from telemetry (`infra/modules/llm-api.bicep`). Protecting body content is a *different* lever — the per-API "log LLM messages" toggle (`promptLogging`): leave message-body logging **off** for sensitive BUs (the `regulated` profile does), or run an ingestion-time Log Analytics transform (DCR) to redact before the data lands. Do not assume `dataMasking: true` scrubs prompts — it does not, and nothing in APIM does.
+The gateway's log-masking can only hide **headers and URL parameters** — verified across every version of the setting. It **cannot** strip personal data (PII) out of the prompt itself or the model's reply. So the `dataMasking` flag does what it can: it hides the credentials (`api-key`/`subscription-key`/`Authorization`) so they never land in logs (`infra/modules/llm-api.bicep`). Protecting the *content* of prompts is a different lever — whether you log the prompt/reply text at all (`promptLogging`): keep that **off** for sensitive business units (the `regulated` profile does), or add a rule that strips personal data out of the logs before they're stored. Bottom line: `dataMasking: true` does **not** scrub prompts — and nothing in the gateway does that automatically.
 
-## 12. SecOps auto-throttle needs an actuator you wire
-The budget alert (`modules/secops.bicep`) is fully deployed GA — detection, action group, the works. But Azure Monitor alerts **notify**; they don't mutate config. Closing the loop to *enforcement* (lower the TPM cap) is `scripts/throttle.*`, which you wire to the action group via an Automation runbook or Logic App (see [runbooks/secops-loop.md](runbooks/secops-loop.md)). Out of the box you get the alert + email and a one-command throttle; the fully-automatic path is a documented wiring step, not a deployed Logic App (kept out of Bicep deliberately — a hand-rolled workflow JSON is brittle for a reference repo). Also: **Defender for APIs** bills per subscription and onboarding each APIM API to it is a second, recommendation-driven portal step after the plan is enabled.
+## 12. Auto-throttling on overspend needs one wiring step
+The budget alert (`modules/secops.bicep`) is fully built — it detects overspend and emails you. But an alert only **notifies**; it can't change a setting on its own. To make an overspend automatically tighten the usage limit, you connect the included throttle script (`scripts/throttle.*`) to the alert (via an Azure Automation runbook or Logic App — see [runbooks/secops-loop.md](runbooks/secops-loop.md)). Out of the box you get the alert, the email, and a one-command manual throttle; full automation is a documented wiring step, not a pre-built workflow (deliberately — a hand-rolled workflow is brittle for a reference repo). Also: **Defender for APIs** (threat protection) is billed per subscription, and switching it on for each individual API is a second step in the Azure portal after the plan is enabled.
 
 ## 13. Workspaces (federation) need a v2 / Premium tier
 The `workspaces` flag (Phase 4 federation) is supported on **Basic v2 / Standard v2 /

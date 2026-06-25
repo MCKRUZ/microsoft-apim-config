@@ -38,7 +38,7 @@
 <p>One doorway, many models. Clients call a single <code>/llm/v1/chat/completions</code>; the gateway
 governs and routes to OpenAI, Anthropic (Claude), or Google — translating formats so the
 client never changes. Flags: <code>multiProvider</code> (the doorway/Claude, <strong>preview, v2-only</strong>) and
-<code>useKeyVault</code> (the GA secret home for the non-Azure key).</p>
+<code>useKeyVault</code> (store the non-Azure provider's API key in Azure Key Vault — Azure's production-ready secrets locker — instead of anywhere in the deployment templates).</p>
 <h2 id="the-honest-split-why-part-of-this-is-a-script">The honest split (why part of this is a script)</h2>
 <table>
 <thead>

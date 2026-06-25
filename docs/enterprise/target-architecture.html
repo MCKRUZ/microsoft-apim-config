@@ -149,7 +149,7 @@
 <h2 id="4-network-isolation-enablenetworkisolation">4. Network isolation (<code>enableNetworkIsolation</code>)</h2>
 <p>The toggle that makes Principle 1 <em>true</em> rather than aspirational.</p>
 <ul>
-<li><strong>VNet injection</strong> (Premium / Premium v2) → APIM gets a private VIP; inbound + outbound isolated. Injection is <strong>create-time only</strong> — bake it into the first deploy.</li>
+<li><strong>Put the gateway inside a private network</strong> (VNet injection, Premium / Premium v2) so it has no public address and all its traffic stays private. This can only be set when the gateway is first created — bake it into the first deploy.</li>
 <li><strong>Private Link + public access OFF</strong> on Azure OpenAI, Content Safety, Azure Managed Redis. With public access disabled, the OpenAI endpoint is useless without the private path — the bypass risk in the seed is closed.</li>
 <li><strong>Front Door Premium + WAF</strong> at the edge for external consumers; private endpoint to the gateway (supported for v2 when fronted by Front Door Premium).</li>
 <li><strong>NSGs</strong> on every subnet (allow Storage + Key Vault dependencies, deny internet egress by default).</li>
@@ -167,9 +167,9 @@
 <h2 id="6-identity-access-identitymode-subscription-entra-both">6. Identity &amp; access (<code>identityMode</code>: <code>subscription</code> | <code>entra</code> | <code>both</code>)</h2>
 <ul>
 <li><strong>Backend auth:</strong> APIM managed identity only; keys disabled. (Seed already does this.)</li>
-<li><strong>Caller identity:</strong> subscription key = team attribution; <strong>Entra JWT validation</strong> for real security identity on the model, tool, and agent surfaces. At enterprise scale, <strong>per-agent workload identities</strong> (Entra) so audit attributes an action to <em>an agent</em>, not just a team.</li>
+<li><strong>Caller identity:</strong> a subscription key tells us <em>which team</em> is calling (for billing); verifying a signed Entra sign-in token (a &quot;JWT&quot;) proves <em>who</em> is calling, for real security, on the model, tool, and agent surfaces. At enterprise scale, give each agent its own identity so the audit trail attributes an action to <em>an agent</em>, not just a team.</li>
 <li><strong>Tool/A2A authorization:</strong> <code>validate-jwt</code> (templated in <code>mcp-governance.xml</code> / <code>a2a-governance.xml</code>) gating tool and hand-off calls.</li>
-<li><strong>Gateway RBAC:</strong> least-privilege custom roles; policy authors ≠ deployers; break-glass account with PIM + alerting.</li>
+<li><strong>Gateway access control:</strong> least-privilege roles; the people who write policy aren't the people who deploy it; an emergency-access (&quot;break-glass&quot;) account whose elevated rights are granted only just-in-time and time-limited (PIM), with an alert every time it's used.</li>
 </ul>
 <h2 id="7-policy-lifecycle-cicd-enablepipelineguardrails">7. Policy lifecycle &amp; CI/CD (<code>enablePipelineGuardrails</code>)</h2>
 <ul>
@@ -186,9 +186,9 @@
 <p>Telemetry is not governance; the closed loop is.</p>
 <ul>
 <li>Token/prompt/completion logs → Log Analytics; token metrics → App Insights (seed does this).</li>
-<li><strong>Microsoft Sentinel</strong> ingest for SIEM correlation; <strong>Defender for APIs</strong> for threat protection on APIM.</li>
-<li><strong>Action</strong>, not just dashboards: budget-threshold alerts → auto-throttle (lower the token-limit named value); injection-rate spike → alert + optional surface quarantine; per-agent anomaly detection on spend.</li>
-<li>KQL workbooks per BU; executive FinOps view (cost per team/agent/model).</li>
+<li>Feed logs into <strong>Microsoft Sentinel</strong> (Azure's security-monitoring system that correlates events to spot attacks) and turn on <strong>Defender for APIs</strong> (threat protection for the gateway).</li>
+<li><strong>Action</strong>, not just dashboards: a budget breach automatically tightens the usage limit; a spike in blocked attacks raises an alert (and can quarantine the surface); unusual per-agent spend is flagged.</li>
+<li>A query-based reporting dashboard per business unit, plus an executive cost view (FinOps = managing cloud spend) breaking spend down by team, agent, and model.</li>
 </ul>
 <h2 id="10-data-protection-enablepromptlogging-datamasking">10. Data protection (<code>enablePromptLogging</code> + <code>dataMasking</code>)</h2>
 <p>Logging prompts/completions for audit <em>is</em> a data-protection obligation.</p>

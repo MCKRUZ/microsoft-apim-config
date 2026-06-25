@@ -1,8 +1,7 @@
 # Runbook — reliability (Phase 5)
 
 Survive a zone, survive a region, survive a flapping model. Three independent layers,
-three flags: `availabilityZones` (zone redundancy), `multiRegion` (regional failover),
-`modelFailover` (backend circuit breaker + load-balanced pool).
+three flags: `availabilityZones` (run across isolated datacenters in a region), `multiRegion` (run live in several regions at once), and `modelFailover` (if a model starts failing or rate-limiting, automatically stop sending it traffic — a "circuit breaker" — and spread calls across a pool of backends).
 
 | Layer | Flag | What it does | Tier |
 |---|---|---|---|

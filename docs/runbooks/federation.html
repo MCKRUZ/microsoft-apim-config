@@ -37,8 +37,8 @@
 <main class="content"><div class="wrap">
 <p>Central control, BU autonomy. The platform team owns the gateway, the global policy
 floor, and the audit plane; each business unit gets a <strong>workspace</strong> — its own APIs,
-products, subscriptions, named values — with Entra RBAC scoped to just that workspace.
-Flags: <code>workspaces</code> (the BU containers) and <code>entraAuth</code> (the Entra JWT identity floor).</p>
+products, subscriptions, settings — with permissions (role-based access control) scoped to just that workspace, governed through Entra ID (Azure's identity service).
+Flags: <code>workspaces</code> (the per-business-unit containers) and <code>entraAuth</code> (require a verified Entra sign-in token — a &quot;JWT&quot; — on every call).</p>
 <h2 id="what-it-deploys">What it deploys</h2>
 <table>
 <thead>

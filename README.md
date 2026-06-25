@@ -1,6 +1,6 @@
 # APIM Agentic Governance — Golden Copy
 
-A canonical, deployable reference implementation of **Azure API Management as the governance layer for AI agents**: the single chokepoint in front of every model call, tool invocation, and agent-to-agent hand-off.
+A ready-to-deploy blueprint that puts **Azure API Management** (Microsoft's API gateway, "APIM") in charge of governing AI agents — the single checkpoint in front of every model call, tool call, and agent-to-agent handoff.
 
 > The trust boundary moved. Model-level safety governs the words a model produces; it cannot govern what an agent *does*. The controls that matter — who may act, how much they may spend, which systems they reach, and a record of everything they did — live at the one point every action crosses: the API gateway.
 >
@@ -16,14 +16,16 @@ One control plane (APIM), three traffic surfaces:
 
 | Surface | Governed by | Status |
 |---|---|---|
-| **agent → model** | token spend caps, content safety, semantic cache, per-team cost attribution | **GA** |
-| **agent → tool** (MCP) | rate limit, identity, agent-id audit trace | Preview |
-| **agent → agent** (A2A) | rate limit, identity, OTel agent attribution | Preview |
-| **one doorway** (unified model API) | the same policies, across providers | Preview |
+| **agent → model** | spend caps, content safety, response caching, per-team cost tracking | **GA** |
+| **agent → tool** — calls to tools (over MCP, the standard agents use to reach tools) | usage limits, identity, an audit trail of which agent called | Preview |
+| **agent → agent** — one agent handing work to another (A2A) | usage limits, identity, a standard telemetry tag of which agent acted | Preview |
+| **one doorway** — a single endpoint across model vendors | the same controls, across providers | Preview |
+
+(GA = generally available / production-ready; Preview = not yet final.)
 
 The four GA controls, applied as one ordered policy ([`infra/policies/llm-governance.xml`](infra/policies/llm-governance.xml)):
 
-1. **Spend cap** — `llm-token-limit`: per-minute TPM rate + monthly quota, with pre-flight prompt estimation so rejected calls never bill the model.
+1. **Spend cap** — `llm-token-limit`: a per-minute usage cap (tokens per minute) plus a monthly budget. It estimates a request's cost before sending it, so rejected calls never bill the model.
 2. **Cost attribution** — `llm-emit-token-metric`: per-team / per-agent token metrics into Application Insights.
 3. **Content safety** — `llm-content-safety` (Prompt Shields): blocks jailbreaks and indirect prompt-injection before the model, request and response.
 4. **Semantic cache** — `llm-semantic-cache-*`: returns cached completions for semantically similar prompts (Redis + RediSearch).
@@ -40,11 +42,11 @@ Six phases, each independently shippable, all on `main`:
 
 | Phase | Capability | Flags | Maturity |
 |---|---|---|---|
-| 1 | **Network isolation** — VNet injection, Private Link, public-access-off (makes the chokepoint enforced, not honor-system) | `networkIsolation` | GA |
-| 2 | **CI/CD guardrails** — reviewed pipeline (`what-if`→approve→apply), policy lint, drift detection | `pipelineGuardrails` | GA |
-| 3 | **SecOps loop** — Sentinel, Defender for APIs, budget→auto-throttle, log masking | `secOpsLoop`, `dataMasking` | GA |
-| 4 | **Federation** — per-BU workspaces, scoped Entra RBAC, enforced `<base/>` inheritance | `workspaces`, `entraAuth` | GA |
-| 5 | **Reliability** — availability zones, multi-region, circuit-breaker backend pool | `availabilityZones`, `multiRegion`, `modelFailover` | GA |
+| 1 | **Network isolation** — put the gateway and its backends on a private network with no public address, so the gateway can't be bypassed | `networkIsolation` | GA |
+| 2 | **CI/CD guardrails** — every change is reviewed and dry-run before it's applied, rolled out stage by stage, with a nightly check for hand edits | `pipelineGuardrails` | GA |
+| 3 | **SecOps loop** — security monitoring, threat protection, automatic throttling when a budget is breached, and stripping secrets from logs | `secOpsLoop`, `dataMasking` | GA |
+| 4 | **Federation** — a walled-off workspace per business unit, access tied to corporate identity, with a central baseline policy that can't be removed | `workspaces`, `entraAuth` | GA |
+| 5 | **Reliability** — run across datacenters and regions at once, and auto-route around a model that's failing or rate-limiting | `availabilityZones`, `multiRegion`, `modelFailover` | GA |
 | 6 | **Multi-provider** — Key Vault secret home + unified doorway / Claude | `useKeyVault`, `multiProvider` | GA + Preview |
 
 The enterprise target, the tier decision (multi-region vs multi-provider), and the compliance mapping (EU AI Act / NIST AI RMF / ISO 42001 / 27001 / SOC 2) are in [docs/enterprise/](docs/enterprise/target-architecture.md). The full per-flag wiring audit — what's Bicep-gated, policy-composed, informational, or declared-future — is [docs/enterprise/flag-status.md](docs/enterprise/flag-status.md).
@@ -140,9 +142,9 @@ azure.yaml                   azd config + postprovision hook
 
 ## Design decisions worth knowing
 
-- **Keyless** — APIM authenticates to every backend with its system-assigned managed identity; no API keys in policies or config ([rbac.bicep](infra/modules/rbac.bicep)). The first real secret (a non-Azure provider key) lives in Key Vault ([keyvault.bicep](infra/modules/keyvault.bicep)).
+- **No stored keys** — the gateway proves who it is to each backend using an Azure-issued identity it owns (a managed identity), so there are no API keys sitting in policy files or config to leak ([rbac.bicep](infra/modules/rbac.bicep)). The first real secret — a key for a non-Azure provider — lives in Azure's secrets locker, Key Vault ([keyvault.bicep](infra/modules/keyvault.bicep)).
 - **Everything toggleable** — every capability is a flag; `dev` reproduces the seed, `regulated` is strict. Flags gate module deployment *and* compose the policy itself, so a disabled control leaves no dead policy ([flag-status.md](docs/enterprise/flag-status.md)).
-- **The chokepoint is enforced, not honor-system** — with `networkIsolation`, backends have no public path; APIM in the VNet is the only route ([network-isolation runbook](docs/runbooks/network-isolation.md)).
+- **The checkpoint is enforced, not honor-system** — with `networkIsolation` on, the backends have no public address; the gateway, sitting on the same private network, is the only way to reach them ([network-isolation runbook](docs/runbooks/network-isolation.md)).
 - **Honest maturity** — GA is Bicep; preview (MCP/A2A/unified doorway/Claude) is scripts. The line is never blurred ([ADR-0003](docs/adr/0003-preview-via-scripts.md)).
 - **The tier trade-off is surfaced, not hidden** — multi-region (Premium classic) and the v2-only multi-provider doorway can't coexist in one instance; the repo models both as a tier parameter ([target-architecture §3](docs/enterprise/target-architecture.md)).
 - **Every caveat is documented** — 16 of them: per-region caps, the content-safety backend-MI IaC gap, data-masking scope, workspace tier reqs, multi-region/multi-provider exclusivity, and more ([docs/caveats.md](docs/caveats.md)).

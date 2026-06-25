@@ -78,7 +78,7 @@ Verified against Microsoft Learn (June 2026):
 
 ## 4. Network isolation (`enableNetworkIsolation`)
 The toggle that makes Principle 1 *true* rather than aspirational.
-- **VNet injection** (Premium / Premium v2) → APIM gets a private VIP; inbound + outbound isolated. Injection is **create-time only** — bake it into the first deploy.
+- **Put the gateway inside a private network** (VNet injection, Premium / Premium v2) so it has no public address and all its traffic stays private. This can only be set when the gateway is first created — bake it into the first deploy.
 - **Private Link + public access OFF** on Azure OpenAI, Content Safety, Azure Managed Redis. With public access disabled, the OpenAI endpoint is useless without the private path — the bypass risk in the seed is closed.
 - **Front Door Premium + WAF** at the edge for external consumers; private endpoint to the gateway (supported for v2 when fronted by Front Door Premium).
 - **NSGs** on every subnet (allow Storage + Key Vault dependencies, deny internet egress by default).
@@ -94,9 +94,9 @@ The org-scale governance model — central control, BU autonomy.
 
 ## 6. Identity & access (`identityMode`: `subscription` | `entra` | `both`)
 - **Backend auth:** APIM managed identity only; keys disabled. (Seed already does this.)
-- **Caller identity:** subscription key = team attribution; **Entra JWT validation** for real security identity on the model, tool, and agent surfaces. At enterprise scale, **per-agent workload identities** (Entra) so audit attributes an action to *an agent*, not just a team.
+- **Caller identity:** a subscription key tells us *which team* is calling (for billing); verifying a signed Entra sign-in token (a "JWT") proves *who* is calling, for real security, on the model, tool, and agent surfaces. At enterprise scale, give each agent its own identity so the audit trail attributes an action to *an agent*, not just a team.
 - **Tool/A2A authorization:** `validate-jwt` (templated in `mcp-governance.xml` / `a2a-governance.xml`) gating tool and hand-off calls.
-- **Gateway RBAC:** least-privilege custom roles; policy authors ≠ deployers; break-glass account with PIM + alerting.
+- **Gateway access control:** least-privilege roles; the people who write policy aren't the people who deploy it; an emergency-access ("break-glass") account whose elevated rights are granted only just-in-time and time-limited (PIM), with an alert every time it's used.
 
 ## 7. Policy lifecycle & CI/CD (`enablePipelineGuardrails`)
 - Policy-as-code in git → PR review → `bicep build` lint → `az deployment ... --what-if` → staged apply (dev → staging APIM → prod).
@@ -110,9 +110,9 @@ The org-scale governance model — central control, BU autonomy.
 ## 9. Observability → action (`enableSecOpsLoop`)
 Telemetry is not governance; the closed loop is.
 - Token/prompt/completion logs → Log Analytics; token metrics → App Insights (seed does this).
-- **Microsoft Sentinel** ingest for SIEM correlation; **Defender for APIs** for threat protection on APIM.
-- **Action**, not just dashboards: budget-threshold alerts → auto-throttle (lower the token-limit named value); injection-rate spike → alert + optional surface quarantine; per-agent anomaly detection on spend.
-- KQL workbooks per BU; executive FinOps view (cost per team/agent/model).
+- Feed logs into **Microsoft Sentinel** (Azure's security-monitoring system that correlates events to spot attacks) and turn on **Defender for APIs** (threat protection for the gateway).
+- **Action**, not just dashboards: a budget breach automatically tightens the usage limit; a spike in blocked attacks raises an alert (and can quarantine the surface); unusual per-agent spend is flagged.
+- A query-based reporting dashboard per business unit, plus an executive cost view (FinOps = managing cloud spend) breaking spend down by team, agent, and model.
 
 ## 10. Data protection (`enablePromptLogging` + `dataMasking`)
 Logging prompts/completions for audit *is* a data-protection obligation.

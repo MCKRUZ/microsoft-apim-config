@@ -36,8 +36,7 @@
 </div></header>
 <main class="content"><div class="wrap">
 <p>Survive a zone, survive a region, survive a flapping model. Three independent layers,
-three flags: <code>availabilityZones</code> (zone redundancy), <code>multiRegion</code> (regional failover),
-<code>modelFailover</code> (backend circuit breaker + load-balanced pool).</p>
+three flags: <code>availabilityZones</code> (run across isolated datacenters in a region), <code>multiRegion</code> (run live in several regions at once), and <code>modelFailover</code> (if a model starts failing or rate-limiting, automatically stop sending it traffic — a &quot;circuit breaker&quot; — and spread calls across a pool of backends).</p>
 <table>
 <thead>
 <tr>

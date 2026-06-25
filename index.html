@@ -204,15 +204,15 @@
         <div class="n">Surface 2</div>
         <h3>agent → tool <span class="badge preview">Preview</span></h3>
         <div class="who">MCP servers</div>
-        <p>Rate-limit, identity, and an agent-id audit trace on tool traffic. Whole-server scope;
-          no response-body access (streaming-safe).</p>
+        <p>Limits, identity checks, and an audit trail on the calls agents make to tools (over MCP,
+          the standard agents use to reach tools). Today this governs a whole tool server at once.</p>
       </div>
       <div class="step agent">
         <div class="n">Surface 3</div>
         <h3>agent → agent <span class="badge preview">Preview</span></h3>
-        <div class="who">A2A JSON-RPC</div>
-        <p>Rate-limit and identity on agent-to-agent hand-offs, with OpenTelemetry
-          <code>gen_ai.agent.id</code> attribution as the audit record.</p>
+        <div class="who">agent-to-agent (A2A)</div>
+        <p>Limits and identity checks when one agent hands work to another, with a standard
+          telemetry tag recording which agent acted — that tag is the audit trail.</p>
       </div>
     </div>
   </div>
@@ -225,8 +225,8 @@
       <div class="ctrl">
         <code>llm-token-limit</code>
         <h4>Spend cap</h4>
-        <p>Per-minute TPM + monthly quota, keyed per team. Pre-flight estimation rejects
-          over-budget calls before they bill the model.</p>
+        <p>A per-minute usage cap plus a monthly budget, per team. It estimates a request's cost
+          before sending it, so rejected calls never run up a bill.</p>
       </div>
       <div class="ctrl">
         <code>llm-emit-token-metric</code>
@@ -256,15 +256,15 @@
       <div class="phase">
         <div class="pn">Phase 1 · GA</div>
         <h3>Network isolation</h3>
-        <p>VNet injection, Private Link, public-access-off. Backends lose their public path — the
-          chokepoint becomes enforced, not honor-system.</p>
+        <p>Put the gateway and its backends on a private network with no public address, so the only
+          way to reach a model is through the gateway — enforced by the network, not by policy alone.</p>
         <div class="flags"><code>networkIsolation</code></div>
       </div>
       <div class="phase">
         <div class="pn">Phase 2 · GA</div>
         <h3>CI/CD guardrails</h3>
-        <p>Reviewed pipeline (what-if → approve → staged apply), structural policy lint, and
-          nightly drift detection. No portal edits in prod.</p>
+        <p>Every change is reviewed and dry-run before it's applied, then rolled out stage by stage;
+          a nightly check flags anything changed by hand. No console edits in production.</p>
         <div class="flags"><code>pipelineGuardrails</code></div>
       </div>
       <div class="phase">
@@ -277,15 +277,16 @@
       <div class="phase">
         <div class="pn">Phase 4 · GA</div>
         <h3>Federation</h3>
-        <p>Per-BU workspaces with scoped Entra RBAC, a global policy floor, and Azure Policy
-          enforcing <code>&lt;base/&gt;</code> inheritance. Central control, BU autonomy.</p>
+        <p>Each business unit gets its own walled-off workspace, with access tied to corporate
+          identity. A company-wide baseline policy is auto-applied to all of them and can't be
+          edited away. Central control, business-unit autonomy.</p>
         <div class="flags"><code>workspaces</code><code>entraAuth</code></div>
       </div>
       <div class="phase">
         <div class="pn">Phase 5 · GA</div>
         <h3>Reliability</h3>
-        <p>Availability zones, multi-region active-active, and a circuit-breaker backend pool.
-          Survive a zone, a region, a throttling model.</p>
+        <p>Run across isolated datacenters and multiple regions at once, and automatically route
+          around a model that's failing or rate-limiting. Survive a zone, a region, a bad model.</p>
         <div class="flags"><code>multiRegion</code><code>availabilityZones</code><code>modelFailover</code></div>
       </div>
       <div class="phase">
@@ -304,10 +305,10 @@
     <h2 class="kicker">Everything is a toggle</h2>
     <div class="callout">
       <h3>One profile, every capability a flag</h3>
-      <p>A <code>profile</code> selects a flag set; any flag is overridable per deploy. Flags gate
-        conditional module deployment <em>and</em> compose the policy itself — so a disabled control
-        leaves no dead policy behind. The per-flag wiring audit (Bicep-gated · policy-composed ·
-        informational · declared-future) is honest about every one.</p>
+      <p>Pick a <code>profile</code> and you get its set of switches; override any one per deployment.
+        A switch either deploys (or skips) a piece of infrastructure, or adds (or removes) a rule from
+        the policy — so turning something off leaves nothing behind. The flag-status page is honest
+        about exactly what each switch does.</p>
       <pre class="code"><span class="c"># pick a posture</span>
 azd env set GOV_PROFILE prod        <span class="c"># dev | test | prod | regulated</span>
 azd up
