@@ -45,12 +45,37 @@ param tokenQuota int = 1000000
 @description('Semantic-cache similarity threshold (lower = stricter match). Start tight.')
 param cacheScoreThreshold string = '0.05'
 
+@description('Capability profile. Selects a feature-flag set from infra/config/profiles.json. See docs/enterprise/capability-toggles.md.')
+@allowed([
+  'dev'
+  'test'
+  'prod'
+  'regulated'
+])
+param profile string = 'dev'
+
+@description('Per-flag overrides merged over the profile, e.g. { networkIsolation: true }.')
+param flagOverrides object = {}
+
+@description('Classic VNet injection mode used when networkIsolation is on (classic tiers). External = public gateway + private backends.')
+@allowed([
+  'External'
+  'Internal'
+])
+param apimVnetMode string = 'External'
+
 @description('Tags applied to every resource.')
 param tags object = {
   workload: 'apim-agentic-governance'
   'managed-by': 'bicep'
   environment: environmentName
 }
+
+// Resolve the capability flags: profile defaults overlaid with explicit overrides.
+var profiles = loadJsonContent('config/profiles.json')
+var flags = union(profiles[profile], flagOverrides)
+var isolation = bool(flags.networkIsolation)
+var apimVnetType = isolation ? apimVnetMode : 'None'
 
 // Deterministic, globally-unique-ish suffix for resource names.
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
@@ -82,12 +107,24 @@ module monitoring 'modules/monitoring.bicep' = {
   }
 }
 
+// Phase 1 network isolation foundation — only when the flag is on.
+module network 'modules/network.bicep' = if (isolation) {
+  scope: rg
+  name: 'network'
+  params: {
+    location: location
+    namePrefix: 'aigov-${resourceToken}'
+    tags: tags
+  }
+}
+
 module openai 'modules/openai.bicep' = {
   scope: rg
   name: 'openai'
   params: {
     location: location
     openAiName: names.openAi
+    publicNetworkAccess: isolation ? 'Disabled' : 'Enabled'
     tags: tags
   }
 }
@@ -108,6 +145,7 @@ module contentSafety 'modules/content-safety.bicep' = {
   params: {
     location: location
     contentSafetyName: names.contentSafety
+    publicNetworkAccess: isolation ? 'Disabled' : 'Enabled'
     tags: tags
   }
 }
@@ -125,6 +163,59 @@ module apim 'modules/apim.bicep' = {
     appInsightsInstrumentationKey: monitoring.outputs.appInsightsInstrumentationKey
     redisDatabaseId: redis.outputs.redisDatabaseId
     redisHostName: redis.outputs.redisHostName
+    virtualNetworkType: apimVnetType
+    apimSubnetId: isolation ? network!.outputs.apimSubnetId : ''
+    tags: tags
+  }
+}
+
+// Private endpoints + public-access-off close the gateway-bypass gap: with public
+// access disabled on the backends, APIM (in the VNet) is the only path to them.
+module peOpenAi 'modules/private-endpoint.bicep' = if (isolation) {
+  scope: rg
+  name: 'pe-openai'
+  params: {
+    location: location
+    name: 'pe-${names.openAi}'
+    subnetId: network!.outputs.peSubnetId
+    targetResourceId: openai.outputs.openAiId
+    groupId: 'account'
+    privateDnsZoneIds: [
+      network!.outputs.dnsZoneIds[0] // privatelink.openai.azure.com
+      network!.outputs.dnsZoneIds[1] // privatelink.cognitiveservices.azure.com
+    ]
+    tags: tags
+  }
+}
+
+module peContentSafety 'modules/private-endpoint.bicep' = if (isolation) {
+  scope: rg
+  name: 'pe-content-safety'
+  params: {
+    location: location
+    name: 'pe-${names.contentSafety}'
+    subnetId: network!.outputs.peSubnetId
+    targetResourceId: contentSafety.outputs.contentSafetyId
+    groupId: 'account'
+    privateDnsZoneIds: [
+      network!.outputs.dnsZoneIds[1] // privatelink.cognitiveservices.azure.com
+    ]
+    tags: tags
+  }
+}
+
+module peRedis 'modules/private-endpoint.bicep' = if (isolation) {
+  scope: rg
+  name: 'pe-redis'
+  params: {
+    location: location
+    name: 'pe-${names.redis}'
+    subnetId: network!.outputs.peSubnetId
+    targetResourceId: redis.outputs.redisClusterId
+    groupId: 'redisEnterprise'
+    privateDnsZoneIds: [
+      network!.outputs.dnsZoneIds[2] // privatelink.redis.azure.net
+    ]
     tags: tags
   }
 }

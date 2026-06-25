@@ -17,6 +17,9 @@
     "apimSkuName": {
       "value": "${APIM_SKU=Developer}"
     },
+    "profile": {
+      "value": "${GOV_PROFILE=dev}"
+    },
     "tokensPerMinute": {
       "value": "${TOKENS_PER_MINUTE=1000}"
     },

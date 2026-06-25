@@ -49,6 +49,17 @@ param redisDatabaseId string
 @description('Redis hostname.')
 param redisHostName string
 
+@description('Classic VNet injection mode. None = no VNet. External = gateway public, backends private-reachable. Internal = fully private gateway (front with App Gateway/Front Door). Classic tiers (Developer/Premium) only; v2 tiers use integration/injection — see docs/enterprise.')
+@allowed([
+  'None'
+  'External'
+  'Internal'
+])
+param virtualNetworkType string = 'None'
+
+@description('APIM subnet resource ID (required when virtualNetworkType != None). Classic-injection subnet: no delegation.')
+param apimSubnetId string = ''
+
 @description('Resource tags applied to every resource.')
 param tags object
 
@@ -70,6 +81,10 @@ resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
   properties: {
     publisherEmail: publisherEmail
     publisherName: publisherName
+    virtualNetworkType: virtualNetworkType
+    virtualNetworkConfiguration: virtualNetworkType == 'None' ? null : {
+      subnetResourceId: apimSubnetId
+    }
   }
 }
 

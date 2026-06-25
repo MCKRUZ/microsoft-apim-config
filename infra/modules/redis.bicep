@@ -58,6 +58,9 @@ resource redisDatabase 'Microsoft.Cache/redisEnterprise/databases@2025-04-01' = 
 @description('Resource ID of the Redis database (the APIM module reads its key to build the cache connection string).')
 output redisDatabaseId string = redisDatabase.id
 
+@description('Resource ID of the Redis Enterprise cluster (private-endpoint target, group "redisEnterprise").')
+output redisClusterId string = redisCluster.id
+
 @description('Redis hostname.')
 output redisHostName string = redisCluster.properties.hostName
 

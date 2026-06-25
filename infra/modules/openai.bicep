@@ -40,6 +40,13 @@ param embeddingsModelVersion string = '1'
 @description('Tokens-per-minute capacity (thousands) for the embeddings deployment.')
 param embeddingsCapacity int = 20
 
+@description('Public network access. Set to Disabled when network isolation is on (reached only via private endpoint).')
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+param publicNetworkAccess string = 'Enabled'
+
 @description('Resource tags applied to every resource.')
 param tags object
 
@@ -55,7 +62,10 @@ resource openAi 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
     customSubDomainName: customSubDomainName
     // Force managed-identity auth from APIM; no API keys in policies or named values.
     disableLocalAuth: true
-    publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: publicNetworkAccess
+    networkAcls: publicNetworkAccess == 'Disabled' ? {
+      defaultAction: 'Deny'
+    } : null
   }
 }
 

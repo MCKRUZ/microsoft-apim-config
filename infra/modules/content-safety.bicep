@@ -19,6 +19,13 @@ param contentSafetyName string
 @description('Custom subdomain — required for managed-identity (AAD) auth. Defaults to the account name.')
 param customSubDomainName string = contentSafetyName
 
+@description('Public network access. Set to Disabled when network isolation is on (reached only via private endpoint).')
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+param publicNetworkAccess string = 'Enabled'
+
 @description('Resource tags applied to every resource.')
 param tags object
 
@@ -33,7 +40,10 @@ resource contentSafety 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
   properties: {
     customSubDomainName: customSubDomainName
     disableLocalAuth: true // APIM authenticates with managed identity, not keys
-    publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: publicNetworkAccess
+    networkAcls: publicNetworkAccess == 'Disabled' ? {
+      defaultAction: 'Deny'
+    } : null
   }
 }
 
