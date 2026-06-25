@@ -1,0 +1,86 @@
+# ============================================================================
+# validate.yml — PR gate. Nothing reaches a deployable branch unreviewed.
+# ============================================================================
+# Phase 2 (pipelineGuardrails). On every PR that touches infra/ or scripts/ this
+# runs the full pre-merge bar:
+#   1. bicep build with warnings treated as errors (lint + compile)
+#   2. structural policy lint (scripts/lint-policies.sh)
+#   3. secret scan (gitleaks) — no key may enter the repo
+#   4. what-if preview against the dev subscription — the reviewer sees the exact
+#      resource delta before approving the merge
+#
+# Auth is GitHub OIDC → Azure federated credentials. No stored cloud secrets
+# (rules/security.md). Configure the federated credential + these repo/環境
+# variables once: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID.
+# See docs/runbooks/ci-cd-pipeline.md.
+# ============================================================================
+name: validate
+
+on:
+  pull_request:
+    paths:
+      - 'infra/**'
+      - 'scripts/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  id-token: write      # OIDC token for az login
+  contents: read
+
+jobs:
+  static:
+    name: build + lint + secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Bicep CLI
+        run: az bicep install
+
+      - name: Bicep build (warnings = errors)
+        # The build must be clean. Any warning line fails the job so lint debt
+        # cannot accumulate (the seed compiles with zero warnings today).
+        run: |
+          set -euo pipefail
+          out=$(az bicep build --file infra/main.bicep --stdout 2>&1 1>/dev/null || true)
+          echo "$out"
+          if echo "$out" | grep -E ': (Warning|Error)'; then
+            echo "::error::bicep build produced warnings or errors"; exit 1
+          fi
+
+      - name: Policy structural lint
+        run: sh scripts/lint-policies.sh
+
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+
+  whatif:
+    name: what-if preview (dev)
+    runs-on: ubuntu-latest
+    needs: static
+    environment: dev          # uses the dev environment's OIDC identity (read-only here)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: What-if (dev profile) — show reviewers the resource delta
+        env:
+          AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+          GOV_PROFILE: dev
+        # Informational on a PR: surface the change set; do not fail on drift here
+        # (drift gating belongs to the scheduled drift.yml against deployed envs).
+        run: |
+          az deployment sub what-if \
+            --location "${AZURE_LOCATION:-eastus2}" \
+            --template-file infra/main.bicep \
+            --parameters @infra/main.parameters.json \
+            --parameters profile=dev

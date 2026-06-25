@@ -1,0 +1,64 @@
+# ============================================================================
+# _deploy-stage.yml — reusable single-stage deploy (called by deploy.yml)
+# ============================================================================
+# One stage of the promotion chain: what-if → deploy → smoke-test, scoped to a
+# GitHub Environment. The environment supplies the OIDC identity and any
+# required-reviewer protection rule, so the approval gate is enforced by the
+# platform, not by convention.
+# ============================================================================
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: GitHub environment (dev | test | prod) — carries OIDC identity + approval rule
+        required: true
+        type: string
+      profile:
+        description: Capability profile passed to main.bicep
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  stage:
+    name: deploy ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: What-if (deploy plan)
+        run: |
+          az deployment sub what-if \
+            --location "${{ vars.AZURE_LOCATION }}" \
+            --template-file infra/main.bicep \
+            --parameters @infra/main.parameters.json \
+            --parameters profile=${{ inputs.profile }}
+
+      - name: Deploy
+        run: |
+          az deployment sub create \
+            --name "gov-${{ inputs.environment }}-${{ github.run_number }}" \
+            --location "${{ vars.AZURE_LOCATION }}" \
+            --template-file infra/main.bicep \
+            --parameters @infra/main.parameters.json \
+            --parameters profile=${{ inputs.profile }}
+
+      - name: Configure content-safety backend MI (post-deploy)
+        run: sh scripts/configure-backend-auth.sh
+        continue-on-error: true   # idempotent; portal-toggle fallback documented in caveats §3
+
+      - name: Smoke-test the governance controls
+        # Contract test: proves the controls still fire after the deploy before we
+        # promote to the next stage. A regression here stops the rollout.
+        run: sh scripts/smoke-test.sh

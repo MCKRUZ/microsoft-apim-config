@@ -1,0 +1,51 @@
+# ============================================================================
+# deploy.yml — staged, approval-gated rollout (Phase 2 pipelineGuardrails)
+# ============================================================================
+# Promotes a change through dev → test → prod. Each stage:
+#   - logs in via that environment's OIDC identity
+#   - runs what-if (the deploy plan, captured in the run log)
+#   - deploys at subscription scope with the environment's GOV_PROFILE
+#   - runs the smoke-test contract suite to prove the governance controls still
+#     fire (jailbreak blocked, cap enforced, cache hit) before promoting
+#
+# The gates are GitHub *Environments*: `test` and `prod` carry required-reviewer
+# protection rules, so prod cannot be reached without a human approval and dev+test
+# must go green first (needs:). No portal deploys — this is the only write path to
+# prod, which is what makes "policy-as-code" enforceable (target-architecture §7).
+#
+# Auth: OIDC federated credentials per environment. No stored cloud secrets.
+# ============================================================================
+name: deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - 'scripts/**'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  dev:
+    uses: ./.github/workflows/_deploy-stage.yml
+    with:
+      environment: dev
+      profile: dev
+
+  test:
+    needs: dev
+    uses: ./.github/workflows/_deploy-stage.yml
+    with:
+      environment: test
+      profile: test
+
+  prod:
+    needs: test
+    uses: ./.github/workflows/_deploy-stage.yml
+    with:
+      environment: prod
+      profile: prod

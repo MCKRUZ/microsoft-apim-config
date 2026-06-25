@@ -170,8 +170,8 @@ Seed (today) → enterprise target, in dependency order. Each step is independen
 | Phase | Adds | Toggles | Why first |
 |---|---|---|---|
 | 0 (done) | GA core: 4 controls, keyless, per-team products, IaC | — | the chokepoint exists |
-| 1 | **Network isolation** (VNet injection + Private Link + public-access-off + WAF) | `networkIsolation` | makes the chokepoint *true*; highest risk if skipped |
-| 2 | **CI/CD guardrails** + drift detection + policy tests | `pipelineGuardrails` | so policy-as-code means something; stops portal drift |
+| 1 (done) | **Network isolation** (VNet injection + Private Link + public-access-off + WAF) | `networkIsolation` | makes the chokepoint *true*; highest risk if skipped |
+| 2 (done) | **CI/CD guardrails** + drift detection + policy tests | `pipelineGuardrails` | so policy-as-code means something; stops portal drift |
 | 3 | **SecOps loop** (Sentinel, Defender, budget→throttle, masking) | `secOpsLoop`, `dataMasking` | enforcement, not observation; audit-ready |
 | 4 | **Federation** (workspaces per BU, scoped RBAC, `<base/>` Azure Policy) | `workspaces`, `entraAuth` | scales to dozens of BUs without losing central control |
 | 5 | **Reliability** (multi-region/AZ, failover pools, capacity/PTU) | `multiRegion` | survives a region; tier decision (§3) lands here |
