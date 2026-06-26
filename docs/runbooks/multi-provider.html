@@ -51,74 +51,74 @@ client never changes. Flags: <code>multiProvider</code> (the doorway/Claude, <st
 <tbody>
 <tr>
 <td><strong>Key Vault + APIM MI access</strong> (<code>useKeyVault</code>)</td>
-<td>GA</td>
+<td>GA (production-ready)</td>
 <td>Bicep — <code>modules/keyvault.bicep</code></td>
 </tr>
 <tr>
 <td><strong>Unified doorway + Claude governance</strong> (<code>multiProvider</code>)</td>
-<td><strong>Preview, v2-only</strong></td>
+<td><strong>Preview (not yet final), v2-only</strong></td>
 <td><code>scripts/provision-preview.*</code> + this runbook</td>
 </tr>
 </tbody>
 </table>
-<p>The unified model API and Anthropic Messages governance lack stable ARM/Bicep types and
-need an out-of-band API key — same profile as the other preview surfaces (MCP/A2A), so they
-ship as a guided script (<a href="../adr/0003-preview-via-scripts.html">ADR-0003</a>), not faked Bicep.
-<code>multiProvider</code> is therefore informational at the Bicep layer (it sets the
-<code>MULTI_PROVIDER_INTENDED</code> output the script reads), like <code>pipelineGuardrails</code>.</p>
+<p>The unified model API and the Anthropic Messages governance don't yet have stable Bicep/ARM
+definitions, and they need an API key supplied separately — the same situation as the other preview features (the standard agents use to reach tools, MCP, and agent-to-agent, A2A) — so they
+ship as a guided script (<a href="../adr/0003-preview-via-scripts.html">ADR-0003</a>) rather than fake Bicep.
+At the Bicep layer, <code>multiProvider</code> is therefore just informational (it sets the
+<code>MULTI_PROVIDER_INTENDED</code> output that the script reads), the same way <code>pipelineGuardrails</code> is.</p>
 <h2 id="the-tier-trade-off-the-load-bearing-constraint">⚠ The tier trade-off (the load-bearing constraint)</h2>
 <blockquote>
-<p><strong>Multi-provider (v2-only) and multi-region (Premium classic only) cannot coexist in one
+<p><strong>Multi-provider (v2-only) and multi-region (Premium classic only) cannot run in the same
 instance today.</strong> (<a href="../enterprise/target-architecture.html#3-tier-decision-the-load-bearing-choice">target-architecture §3</a>)</p>
 </blockquote>
-<p>If you need both, run them as <strong>separate instances behind the same edge</strong>:</p>
+<p>If you need both, run them as <strong>two separate instances behind the same front door</strong>:</p>
 <ul>
 <li>a <strong>Premium classic</strong> instance for multi-region OpenAI (Phase 5), and</li>
-<li>a <strong>v2</strong> instance (or a <strong>self-hosted gateway sidecar</strong>) for the multi-provider doorway.</li>
+<li>a <strong>v2</strong> instance (or a <strong>self-hosted companion gateway, a &quot;sidecar&quot;</strong>) for the multi-provider doorway.</li>
 </ul>
-<p>A v2 instance has no multi-region; a Premium-classic instance can't do the v2 unified doorway.
-This is a current Azure limit — revisit when v2 ships multi-region.</p>
+<p>A v2 instance can't do multi-region; a Premium-classic instance can't do the v2 unified doorway.
+This is a current Azure limitation — revisit it when v2 adds multi-region.</p>
 <h2 id="secret-handling-usekeyvault">Secret handling (<code>useKeyVault</code>)</h2>
-<p>The golden copy is keyless to Azure (APIM MI calls OpenAI/Content Safety). A non-Azure
-provider key is the <strong>first real secret</strong>, and Key Vault is its home:</p>
+<p>The standard configuration uses no stored keys for Azure services (the gateway reaches OpenAI and Content Safety with its own Azure-issued identity). A non-Azure
+provider key is the <strong>first real secret</strong> in the system, and Key Vault (Azure's secrets locker) is where it belongs:</p>
 <ol>
-<li>Deploy with <code>useKeyVault</code> on (test/prod/regulated default it). <code>modules/keyvault.bicep</code>
-creates the vault and grants APIM's MI <strong>Key Vault Secrets User</strong>.</li>
-<li>Store the key (out-of-band — never in a template):<pre><code class="language-bash">az keyvault secret set --vault-name &lt;KEY_VAULT_NAME&gt; --name anthropic-api-key --value &lt;key&gt;
+<li>Deploy with <code>useKeyVault</code> on (the test/prod/regulated profiles default it on). <code>modules/keyvault.bicep</code>
+creates the vault and grants the gateway's identity the <strong>Key Vault Secrets User</strong> role.</li>
+<li>Store the key (separately — never inside a template):<pre><code class="language-bash">az keyvault secret set --vault-name &lt;KEY_VAULT_NAME&gt; --name anthropic-api-key --value &lt;key&gt;
 </code></pre>
 </li>
-<li>Create a <strong>Key Vault reference</strong> named value <code>anthropic-api-key</code> → APIM resolves it at
-runtime and rotates without redeploy. The plaintext never touches a template, output, or
-named-value body.</li>
+<li>Create a named value <code>anthropic-api-key</code> that <strong>points at the Key Vault secret</strong> → the gateway looks it up at
+request time and picks up rotations without a redeploy. The plaintext key never appears in a template, an
+output, or the named-value itself.</li>
 </ol>
 <blockquote>
-<p>Ordering gotcha: APIM validates a KV-reference named value when it's created, so the secret
-must exist <strong>first</strong>. That's why the named value is created post-deploy (script), not in Bicep.</p>
+<p>Ordering gotcha: the gateway checks a Key Vault-linked named value the moment it's created, so the secret
+must already exist <strong>first</strong>. That's why this named value is created after the deploy (by the script), not in Bicep.</p>
 </blockquote>
-<h2 id="adding-claude-the-guided-flow">Adding Claude — the guided flow</h2>
-<p><code>provision-preview.*</code> (run by <code>azd up</code>, or manually) prints the steps, parameterized with your
-Key Vault + APIM names. Summary:</p>
+<h2 id="adding-claude--the-guided-flow">Adding Claude — the guided flow</h2>
+<p><code>provision-preview.*</code> (run by <code>azd up</code>, or by hand) prints the steps, filled in with your
+Key Vault and gateway names. In summary:</p>
 <ol>
 <li>Store the Anthropic key in Key Vault (above).</li>
-<li>Named value <code>anthropic-api-key</code> → the KV secret.</li>
-<li>Backend <code>https://api.anthropic.com</code>, credential header <code>x-api-key = {{anthropic-api-key}}</code>.</li>
-<li>Unified model API → add model <code>claude</code>, format <strong>Anthropic Messages</strong>, backend = the
-Anthropic backend. <strong>Reuse the same token-limit / content-safety policies</strong> — governance is
-provider-agnostic; that's the whole point of the doorway.</li>
+<li>Point the named value <code>anthropic-api-key</code> at that Key Vault secret.</li>
+<li>Add a backend <code>https://api.anthropic.com</code> with the credential header <code>x-api-key = {{anthropic-api-key}}</code>.</li>
+<li>In the unified model API, add a model <code>claude</code> with format <strong>Anthropic Messages</strong> and the
+Anthropic backend. <strong>Reuse the same token-limit and content-safety policies</strong> — governance doesn't care which
+provider it's protecting, which is the whole point of the single doorway.</li>
 </ol>
-<h2 id="why-you-cant-just-pool-openai-claude-for-failover">Why you can't just pool OpenAI + Claude for failover</h2>
-<p>The Phase-5 <code>openai-pool</code> load-balances across backends that speak the <strong>same</strong> wire format.
-OpenAI and Anthropic Messages differ, so a raw pool failover would send OpenAI-shaped requests
-to Anthropic and fail. Cross-provider failover <strong>requires the unified doorway's translation</strong> —
-which is the v2-only preview piece. So: same-provider failover = Phase 5 (GA pool); cross-
-provider = Phase 6 (preview doorway). Don't mix them in one pool.</p>
+<h2 id="why-you-cant-just-pool-openai--claude-for-failover">Why you can't just pool OpenAI + Claude for failover</h2>
+<p>The Phase-5 <code>openai-pool</code> load-balances across backends that all speak the <strong>same</strong> request format.
+OpenAI and Anthropic Messages use different formats, so a plain pool failover would send OpenAI-shaped requests
+to Anthropic and fail. Failing over across providers <strong>requires the unified doorway to translate between formats</strong> —
+which is the v2-only preview piece. So: same-provider failover = Phase 5 (the production-ready pool); cross-
+provider failover = Phase 6 (the preview doorway). Don't mix the two in one pool.</p>
 <h2 id="verify">Verify</h2>
 <ul>
-<li><code>useKeyVault</code>: Key Vault exists; APIM MI has <strong>Key Vault Secrets User</strong> (Access control → role
+<li><code>useKeyVault</code>: the Key Vault exists, and the gateway's identity has the <strong>Key Vault Secrets User</strong> role (Access control → role
 assignments).</li>
 <li>After the guided steps: <code>GET /llm/v1/models</code> lists both <code>gpt-4o</code> and <code>claude</code>; a call to
-<code>/llm/v1/chat/completions</code> with <code>model: claude</code> is governed (token-limit + content-safety fire)
-and translated. Confirm token metrics carry the model dimension.</li>
+<code>/llm/v1/chat/completions</code> with <code>model: claude</code> is governed (the token-limit and content-safety controls fire)
+and translated. Confirm the token metrics include the model name as a dimension.</li>
 </ul>
 
 </div></main>

@@ -1,6 +1,6 @@
 # Maturity matrix — what is GA, what is preview
 
-A clear-eyed reading of maturity is required before betting production governance on any of this. The **cost and safety core is production-ready**; the orchestration and multi-provider layers on top are still arriving. This golden copy implements the GA core as pure Bicep and the preview surfaces as guided post-deploy provisioning.
+Before betting production governance on any of this, you need an honest read on how finished each piece is. The **cost and safety core is production-ready (generally available, "GA")**; the layers on top — orchestrating agents and supporting multiple model providers — are still arriving and not yet final ("preview"). This golden copy builds the GA core entirely as infrastructure-as-code, and stands up the preview features through guided steps you run after deployment.
 
 | Capability | Status | This repo | What to know |
 |---|---|---|---|
@@ -17,8 +17,8 @@ A clear-eyed reading of maturity is required before betting production governanc
 
 ## Why the split matters for this repo
 
-- **GA core = Infrastructure as Code.** Everything in the GA rows above is deployed and version-controlled in `infra/` Bicep. It compiles clean and deploys with `azd up`.
-- **Preview surfaces = guided post-deploy.** MCP, A2A, and the unified doorway lack stable ARM/Bicep resource types today, so they are provisioned through `scripts/provision-preview.*` (portal/CLI steps + doc links) rather than faked as Bicep. See [ADR-0003](adr/0003-preview-via-scripts.md).
-- **The maturity legend is honest, not aspirational.** A preview feature here is labelled **PREVIEW** at the top of its doc and may need rework as Microsoft changes the surface. Know what is finished before you build on it.
+- **The production-ready core is fully infrastructure-as-code.** Everything in the GA rows above is deployed and version-controlled in the `infra/` folder. It compiles cleanly and deploys with a single `azd up` command.
+- **The preview features are set up by guided steps after deployment.** Tool governance (MCP), agent-to-agent (A2A), and the unified doorway don't have stable, deployable resource definitions in Azure yet, so they are stood up through `scripts/provision-preview.*` (portal and command-line steps plus doc links) rather than faked as code that doesn't really work. See [ADR-0003](adr/0003-preview-via-scripts.md).
+- **The status labels are honest, not wishful.** Any preview feature here is marked **PREVIEW** at the top of its doc and may need rework as Microsoft changes it. Know what is actually finished before you build on it.
 
 Source thesis and the original maturity table: `matthewkruczek.ai/blog/apim-agentic-governance`.

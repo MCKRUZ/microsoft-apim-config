@@ -37,11 +37,15 @@
 <main class="content"><div class="wrap">
 <p>GA control. See <a href="../architecture.html">architecture</a> and <a href="../caveats.html">caveats</a>.</p>
 <h2 id="what-it-controls">What it controls</h2>
-<p>Per-minute token rate (TPM) plus a token quota over a longer period, keyed to the
-subscription = team identity. Agents are bursty and can run away — a single bad loop
-can burn a month of budget in minutes. This is the hard spend cap that makes an agent
-fleet financially safe. <code>estimate-prompt-tokens</code> rejects oversize prompts pre-flight,
-so a rejected request never bills the backend.</p>
+<p>This is the hard spending limit that makes a fleet of AI agents financially safe. Agents
+are unpredictable and can run away — a single bad loop can burn a month of budget in
+minutes. This control caps that.</p>
+<p>It works on two clocks, both tied to each team's identity (their subscription). First, a
+speed limit measured in tokens per minute (a token is the unit the model bills by, roughly
+a word-piece) — &quot;TPM&quot; for short. Second, a total budget (quota) over a longer period, such
+as a month. Because <code>estimate-prompt-tokens</code> checks the size of a request before it is sent
+(&quot;pre-flight&quot;), an oversized request is rejected up front and never costs anything at the
+model backend.</p>
 <h2 id="the-policy">The policy</h2>
 <p>From <code>infra/policies/llm-governance.xml</code> (inbound, after auth):</p>
 <pre><code class="language-xml">&lt;llm-token-limit

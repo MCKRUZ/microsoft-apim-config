@@ -37,18 +37,18 @@
 <main class="content"><div class="wrap">
 <p><strong>Status:</strong> Accepted · <strong>Date:</strong> 2026-06-25</p>
 <h2 id="context">Context</h2>
-<p>We need a single enforcement point for AI agent traffic — model calls, tool calls, and agent-to-agent hand-offs — where spend caps, identity, content safety, and audit live. The candidates: Azure API Management, Kong, an AWS Bedrock + separate gateway combo, or smaller players (Gravitee, Tyk, Truefoundry).</p>
+<p>We need one place where all AI traffic is controlled — a single checkpoint that every call passes through so spend caps, identity, content safety, and audit logging are enforced in one spot. &quot;All AI traffic&quot; means three things: calls to the AI models, calls to tools the agents use, and hand-offs between agents (agent-to-agent, &quot;A2A&quot;). The candidates we weighed: the API gateway (Azure API Management, &quot;APIM&quot;), Kong, an AWS Bedrock plus separate gateway combo, or smaller players (Gravitee, Tyk, Truefoundry).</p>
 <h2 id="decision">Decision</h2>
-<p>Use <strong>Azure API Management</strong>.</p>
+<p>Use <strong>Azure API Management</strong> as that single checkpoint.</p>
 <h2 id="rationale">Rationale</h2>
 <ul>
-<li>The organisation is Azure-committed (Azure/.NET/Bicep stack). For an Azure-committed org, APIM's AI controls are <strong>built in</strong> and feed the same Azure Monitor / App Insights tooling already in use — nothing extra to stitch together.</li>
-<li>APIM is the one gateway that sits in front of <strong>all three</strong> traffic surfaces (model, MCP tool, A2A) with one control plane and one set of policies.</li>
-<li>The GA core (token limits, content safety, semantic cache, cost attribution) is production-ready today.</li>
+<li>The organisation is already all-in on Azure (Azure, .NET, and Azure's deployment templates, Bicep/ARM). For such an org, APIM's AI controls come <strong>built in</strong> and feed the monitoring tools already in use (Azure Monitor / App Insights) — nothing extra to stitch together.</li>
+<li>APIM is the one gateway that sits in front of <strong>all three</strong> kinds of traffic — model calls, tool calls (the tools agents use, exposed through the &quot;MCP&quot; tool protocol), and agent-to-agent hand-offs — under a single control point and a single set of rules.</li>
+<li>Its core feature set is already generally available / production-ready (&quot;GA&quot;) today: token limits (caps on AI usage), content safety, a cache for repeated questions, and cost tracking per team.</li>
 </ul>
 <h2 id="honest-limits-why-this-isnt-an-unqualified-win">Honest limits (why this isn't an unqualified win)</h2>
 <ul>
-<li>Governing Claude needs a v2 tier; company-wide budgets need per-region math; the Consumption tier is excluded from spend controls; MCP tool governance is whole-server, not per-tool. The claim that APIM is the single <em>most complete</em> option is genuinely contested across vendors.</li>
+<li>A few things don't come for free: governing Anthropic's Claude requires the newer v2 tier; company-wide budgets require some per-region arithmetic; the cheapest &quot;Consumption&quot; tier can't enforce spend controls at all; and tool governance covers a whole tool server at once, not each individual tool. Whether APIM is the single <em>most complete</em> option is genuinely debated among vendors.</li>
 <li>These are acceptable because (a) we are OpenAI-only and Azure-committed, and (b) the limits are documented in <a href="../caveats.html">caveats.md</a>, not hidden.</li>
 </ul>
 <h2 id="consequences">Consequences</h2>

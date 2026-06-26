@@ -3,18 +3,18 @@
 **Status:** Accepted · **Date:** 2026-06-25
 
 ## Context
-The user chose a full showcase including the preview surfaces (MCP server, A2A agent API, unified model API). The GA core is clean Bicep. But the preview constructs are new in 2025–2026 and their management APIs are still moving.
+The showcase includes features that are not yet final ("preview"): the tool server (MCP), the agent-to-agent (A2A) API, and the one-endpoint model API that can front multiple model vendors. The production-ready ("GA", generally available) core is defined cleanly in Azure's deployment templates (Bicep/ARM). But these preview features are brand new (2025–2026) and the way you set them up is still changing.
 
 ## Decision
-Implement the **GA core as pure Bicep** (`infra/`). Provision the **preview surfaces via post-deploy scripts** (`scripts/provision-preview.*`) that attempt `az rest`/CLI where stable and otherwise print authoritative portal steps + doc links. Wire the script into `azd` as a `postprovision` hook.
+Build the **GA core entirely as Bicep templates** (`infra/`). Set up the **preview features through scripts that run after deployment** (`scripts/provision-preview.*`). Those scripts use Azure's command-line tools where they're stable, and otherwise print the exact portal click-path plus links to the official docs. The script is wired to run automatically right after deploy (via `azd`'s `postprovision` hook).
 
 ## Rationale
-- Verified: MCP server, A2A agent API, and unified model API are documented as **portal/CLI/REST** experiences with immature or absent stable ARM/Bicep resource types. Faking them as Bicep would be dishonest and would break on the next API revision.
-- A guided script that points at the exact portal flow and the governance policy file to paste is more durable than brittle calls to shifting preview endpoints.
-- Keeps a clean line: if it's in `infra/` it's GA and reproducible; if it's in `scripts/provision-preview.*` it's preview and may need updating.
+- Confirmed: the tool server (MCP), the A2A agent API, and the one-endpoint model API are documented only as portal/command-line/REST steps, with the matching Bicep/ARM building blocks either missing or not yet stable. Pretending they were Bicep would be dishonest and would break the next time the API changes.
+- A guided script that points to the exact portal steps and the governance rules file to paste in is more durable than fragile automated calls against features that are still shifting.
+- It keeps a clean dividing line: anything in `infra/` is production-ready and repeatable; anything in `scripts/provision-preview.*` is preview and may need updating.
 
 ## Also covered here
-The content-safety **backend managed-identity auth** is a GA control that hits the same wall — it's not in the ARM backend schema (verified through `2025-09-01-preview`). It's handled by `scripts/configure-backend-auth.*` (chained from `provision-preview`), with a one-toggle portal fallback. See [caveats.md](../caveats.md) §3.
+The content-safety service signs in using **an Azure-issued identity the service owns (a managed identity, so no stored password)**. This is a production-ready control, but it hits the same wall — the Bicep/ARM templates don't yet support setting it (confirmed through API version `2025-09-01-preview`). So it's handled by `scripts/configure-backend-auth.*` (run as part of `provision-preview`), with a single portal toggle as a fallback. See [caveats.md](../caveats.md) §3.
 
 ## Consequences
 - `azd up` provisions GA infra, then the postprovision hook configures content-safety MI and prints preview-provisioning guidance.

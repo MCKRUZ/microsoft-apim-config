@@ -1,6 +1,6 @@
 # Capability Toggle Catalog
 
-Every governance capability as a feature flag: its parameter, default per profile, tier requirement, maturity, and how it's implemented. Profiles: **D**=dev, **T**=test, **P**=prod, **R**=regulated. `●`=on, `○`=off by default (always overridable per deploy).
+Every governance capability is a switch you can flip. For each one this lists its setting name, whether it is on by default in each environment, which service tier it needs, whether it is production-ready or still in preview, and how it is built. The four environments are **D**=dev, **T**=test, **P**=prod, **R**=regulated. `●` means on by default and `○` means off by default — either can be overridden on any given deployment.
 
 ## Platform / hardening toggles
 
@@ -36,19 +36,20 @@ Every governance capability as a feature flag: its parameter, default per profil
 | `multiProvider` | Unified doorway / Claude / Gemini | ○ | ○ | ○ | ○ | **v2 tiers** | **Preview** | `provision-preview.*` guided flow (doorway + Anthropic backend + KV-ref key); informational at Bicep layer via `MULTI_PROVIDER_INTENDED` |
 | `modelFailover` | Load-balanced backend pool + circuit breaker | ○ | ● | ● | ● | all | GA | `chat-backend` (circuitBreaker) + `openai-pool` (type Pool) in `llm-api.bicep`, routed via `set-backend-service` |
 
-\* In `regulated`, semantic cache and prompt-body logging default **off**: cache can surface a close-but-wrong answer, and raw prompt logging is a data-protection liability. Turn on deliberately with masking + tight `score-threshold`.
+\* In the `regulated` environment, the semantic cache and the logging of prompt text are both off by default. The cache can return a close-but-wrong answer, and storing raw prompts is a data-protection risk. Turn either on only on purpose — with masking and a tight similarity `score-threshold`.
 
-> The seven GA control flags above are **composed into the policy** at deploy time
-> (`llm-api.bicep` splices each element into [`llm-governance.xml`](../../infra/policies/llm-governance.xml)
-> only when its flag is on). `customBlocklists` and `promptLogging` are *documented controls*
-> (external config), and `edgeWaf`/`selfHostedGateway` are *declared-future*. The full per-flag
-> wiring audit is in [flag-status.md](flag-status.md).
+> The seven production-ready control switches above are **assembled into the policy** at deploy
+> time: `llm-api.bicep` drops each element into [`llm-governance.xml`](../../infra/policies/llm-governance.xml)
+> only when its switch is on. `customBlocklists` and `promptLogging` are *documented controls*
+> (they need configuration set up outside this repo), and `edgeWaf` / `selfHostedGateway` are
+> *declared for the future*. The full switch-by-switch audit of how each is wired is in
+> [flag-status.md](flag-status.md).
 
-## Notes on dependencies
-- `multiRegion` and `multiProvider` are **mutually exclusive in one instance today** (Premium classic vs v2 — see [target-architecture §3](target-architecture.md#3-tier-decision-the-load-bearing-choice)). The flag set validates this and fails the build if both are `true` on one instance.
-- `networkIsolation` via injection is **create-time only** on Premium v2 — changing it later requires recreating the instance.
-- `workspaces` requires `entraAuth` for meaningful RBAC scoping.
-- `secOpsLoop` budget→throttle writes the `tokens-per-minute` / `token-quota` named values, so it depends on `tokenRateLimit`/`tokenQuota`.
+## How the switches depend on each other
+- `multiRegion` and `multiProvider` **cannot both be on in one gateway today** — running live in several regions at once needs the Premium classic tier, while governing multiple providers needs v2 (see [target-architecture §3](target-architecture.md#3-tier-decision-the-load-bearing-choice)). The build checks for this and fails if both are set to `true` on one gateway.
+- `networkIsolation` (placing the gateway inside a private network) can only be set when the gateway is first created on Premium v2. Changing it later means recreating the gateway.
+- `workspaces` needs `entraAuth` turned on, otherwise there is no signed-in identity to scope permissions against.
+- The budget-throttle part of `secOpsLoop` writes the `tokens-per-minute` / `token-quota` settings, so it depends on `tokenRateLimit` / `tokenQuota` being on.
 
 ## How a flag flows
 ```
@@ -57,4 +58,4 @@ profile/flag (main.parameters) ─► flags object (config/profiles.bicep)
    ├─► conditional policy:   value: replace(loadTextContent('policies/llm-governance.xml'), '<!--JWT-->', flags.entraAuth ? jwtFragment : '')
    └─► resource property:    publicNetworkAccess: flags.networkIsolation ? 'Disabled' : 'Enabled'
 ```
-Policy fragments are assembled from toggles so a disabled control leaves **no** dead policy in the pipeline (cleaner than commented blocks).
+The policy is built up from whichever switches are on, so a control that is turned off leaves **no** leftover dead policy behind — cleaner than leaving blocks of disabled code commented out.

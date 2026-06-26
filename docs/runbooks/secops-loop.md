@@ -8,15 +8,15 @@ logs the gateway already emits into **detection → alert → enforcement**. Fla
 
 | Resource | Purpose |
 |---|---|
-| Diagnostic setting on APIM → Log Analytics | Streams `GatewayLogs` + `GatewayLlmLogs`. The latter populates `ApiManagementGatewayLlmLog` (TotalTokens/PromptTokens/…) — the grounded source the budget alert queries. |
-| Microsoft Sentinel onboarding | SIEM correlation on the workspace. |
-| Action group `ag-aigov-secops` | Email receiver; the webhook receiver is where you wire the auto-throttle actuator. |
-| Log alert `aigov-budget-threshold` | `sum(TotalTokens)` over 1h > `budgetTokensPerHour` → the auto-throttle trigger. |
-| Log alert `aigov-injection-spike` | Count of 403 (content-safety blocks) on the governed API over 15m > `injection403Threshold` → likely attack wave. |
-| Defender for APIs (subscription plan) | Threat protection on APIM. Deployed at sub scope in `main.bicep`. |
+| Diagnostic setting on APIM → Log Analytics | Streams `GatewayLogs` + `GatewayLlmLogs`. The second one fills the `ApiManagementGatewayLlmLog` table (TotalTokens/PromptTokens/…) — the trustworthy source the budget alert reads. |
+| Microsoft Sentinel onboarding | Connects the logs to a security-monitoring system that correlates events to spot attacks (a "SIEM"). |
+| Action group `ag-aigov-secops` | The target an alert notifies or triggers. It has an email receiver, plus a webhook receiver where you connect the automatic throttling action. |
+| Log alert `aigov-budget-threshold` | Fires when `sum(TotalTokens)` over 1 hour exceeds `budgetTokensPerHour` — the trigger for automatic throttling. |
+| Log alert `aigov-injection-spike` | Fires when the number of 403 responses (content-safety blocks) on the governed API over 15 minutes exceeds `injection403Threshold` — a likely attack wave. |
+| Defender for APIs (subscription plan) | Threat protection for the gateway. Turned on across the whole subscription in `main.bicep`. |
 
-`dataMasking` (independent flag) Hides `api-key`/`subscription-key`/`Authorization` from
-the App Insights diagnostic (`modules/llm-api.bicep`).
+`dataMasking` (a separate flag) hides `api-key`/`subscription-key`/`Authorization` from
+the App Insights logs (`modules/llm-api.bicep`), so credentials never land in telemetry.
 
 ## The closed loop, end to end
 
@@ -29,27 +29,29 @@ agent → APIM → model
                                  webhook)                        (effective next request)
 ```
 
-The alert detects; **`scripts/throttle.*` enforces** by lowering the `tokens-per-minute`
-named value the governance policy reads — no redeploy, takes effect on the next requests.
+The alert spots the problem; **`scripts/throttle.*` acts on it** by lowering the `tokens-per-minute`
+value the governance policy reads. No redeploy is needed, and it takes effect on the next requests.
 
 ### Wiring the actuator (pick one)
 
-1. **Manual (simplest).** On the budget email, run:
+The "actuator" is whatever automatically runs the throttle when the alert fires. Pick one:
+
+1. **Manual (simplest).** When the budget email arrives, run:
    ```bash
    scripts/throttle.sh 100        # clamp to 100 TPM
    scripts/throttle.sh restore 1000
    ```
-2. **Automation runbook (recommended for prod).** Create an Azure Automation account
-   with a managed identity granted `API Management Service Contributor` on the APIM RG.
-   Put the body of `throttle.sh`/`throttle.ps1` in a runbook, add a **webhook** receiver
-   to the action group pointing at the runbook's webhook. Now a budget breach throttles
+2. **Automation runbook (recommended for production).** Create an Azure Automation account
+   with an Azure-issued identity (no stored password) granted `API Management Service Contributor` on the gateway's resource group.
+   Put the contents of `throttle.sh`/`throttle.ps1` into a runbook, then add a **webhook** receiver
+   to the alert target (action group) that points at the runbook's webhook. Now a budget breach throttles
    automatically.
-3. **Logic App.** Same idea with a Consumption Logic App (HTTP trigger from the action
-   group → `az`/ARM call). Not deployed by this repo by design — see [caveats §12](../caveats.md#12-secops-auto-throttle-needs-an-actuator-you-wire).
+3. **Logic App.** The same idea using a Consumption Logic App (an HTTP trigger from the alert
+   target makes the `az`/ARM call). This repo deliberately doesn't deploy it — see [caveats §12](../caveats.md#12-auto-throttling-on-overspend-needs-one-wiring-step).
 
-> Throttling diverges live config from the repo; `scripts/drift-detect.*` will flag it
-> until you redeploy or adopt the new cap. That's intended — the drift signal is your
-> reminder to reconcile after an incident.
+> Throttling makes the live configuration differ from the repo, so the dry-run check (`scripts/drift-detect.*`) will flag it
+> until you either redeploy or adopt the new cap. That's intentional — the drift signal is your
+> reminder to reconcile things once the incident is over.
 
 ## Tuning the thresholds
 
@@ -58,20 +60,20 @@ az deployment sub create -l eastus2 -f infra/main.bicep \
   -p infra/main.parameters.json -p profile=prod \
   -p budgetTokensPerHour=20000000 -p injection403Threshold=50
 ```
-Set `budgetTokensPerHour` to ~1.5× your expected peak hourly tokens so normal load
-doesn't page anyone. Set `injection403Threshold` above your benign 403 floor (failed
-auth, etc.) so only a genuine spike fires.
+Set `budgetTokensPerHour` to about 1.5 times your expected peak hourly tokens, so normal load
+doesn't wake anyone up. Set `injection403Threshold` above your normal baseline of harmless 403s (failed
+sign-ins, etc.), so only a genuine spike triggers the alert.
 
 ## Data protection: what `dataMasking` does and doesn't
 
-- **Does:** Hides `api-key` + `subscription-key` + `Authorization` from telemetry — the
-  secret-leak vector. Always turn this on when logging is on.
-- **Does NOT:** redact PII inside prompt/completion **bodies** — APIM masking is
-  headers/query only ([caveats §11](../caveats.md#11-data-masking-covers-headers-and-query-params--not-promptcompletion-bodies)).
-- **Body PII control = `promptLogging`.** Leave LLM message-body logging **off** for
-  sensitive BUs (the `regulated` profile defaults it off, keeping token *metadata* for
-  cost/audit while dropping the message contents). For audit-with-redaction, add an
-  ingestion-time DCR transform on the `ApiManagementGatewayLlmLog` table.
+- **Does:** hide `api-key` + `subscription-key` + `Authorization` from the logs — the most likely way a
+  secret leaks. Always turn this on whenever logging is on.
+- **Does NOT:** remove personal data (PII) inside the prompt/completion **message bodies** — the gateway's masking covers
+  headers and query parameters only ([caveats §11](../caveats.md#11-data-masking-covers-headers-and-query-params--not-promptcompletion-bodies)).
+- **Message-body PII is controlled by `promptLogging`.** Keep message-body logging **off** for
+  sensitive business units (the `regulated` profile turns it off by default, keeping token *counts* for
+  cost and audit while dropping the actual message contents). If you need to log bodies but with sensitive fields removed, add a
+  rule that strips or transforms fields as the logs are collected (a Data Collection Rule, "DCR") on the `ApiManagementGatewayLlmLog` table.
 
 ## Verify after deploy
 
@@ -82,14 +84,14 @@ auth, etc.) so only a genuine spike fires.
   ApiManagementGatewayLlmLog | summarize sum(TotalTokens) by bin(TimeGenerated, 1h)
   ApiManagementGatewayLogs   | where ResponseCode == 403 | summarize count() by bin(TimeGenerated, 15m)
   ```
-- Trip the budget alert in staging (low `budgetTokensPerHour`), confirm the email, then
-  confirm `throttle.sh` lowers the cap and the next over-cap call returns 429.
+- Deliberately trip the budget alert in staging (set a low `budgetTokensPerHour`), confirm the email arrives, then
+  confirm `throttle.sh` lowers the cap and the next call over the cap returns 429.
 
 ## ⚠ Validate before production
-- **Alert KQL tables/columns** (`ApiManagementGatewayLlmLog.TotalTokens`,
-  `ApiManagementGatewayLogs.ResponseCode/ApiId`) are verified against the Azure Monitor
-  table reference, but the LLM logging schema is evolving — confirm against your
-  workspace before trusting the thresholds.
-- **Defender for APIs** is a paid plan billed per subscription; enabling it via the
-  `secOpsLoop` flag turns it on subscription-wide. Onboard individual APIM APIs from the
-  Defender for Cloud **Recommendations** after the plan is on (≈40–50 min to appear).
+- The **log queries behind the alerts** (the KQL using `ApiManagementGatewayLlmLog.TotalTokens`,
+  `ApiManagementGatewayLogs.ResponseCode/ApiId`) are checked against the Azure Monitor
+  table reference, but the LLM logging schema is still changing — confirm the table and column names against your own
+  workspace before you rely on the thresholds.
+- **Defender for APIs** is a paid plan billed per subscription, and turning it on with the
+  `secOpsLoop` flag enables it across the whole subscription. Once the plan is on, add individual gateway APIs from the
+  Defender for Cloud **Recommendations** (they take roughly 40–50 minutes to appear).

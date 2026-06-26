@@ -21,9 +21,11 @@ MD = MarkdownIt("commonmark").enable(["table", "strikethrough"])  # CommonMark +
 
 
 def github_slug(text):
+    # Match GitHub's slugify: lowercase, drop punctuation, each whitespace char -> a
+    # hyphen (NOT collapsed — a spaced em-dash yields "--", which authored links rely on).
     t = re.sub(r'<[^>]+>', '', text).replace('&amp;', '&')
     t = re.sub(r'[^\w\s-]', '', t.lower())
-    return re.sub(r'-+', '-', re.sub(r'\s+', '-', t.strip()))
+    return re.sub(r'\s', '-', t.strip())
 
 
 def add_heading_ids(html_str):

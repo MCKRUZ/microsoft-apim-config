@@ -50,12 +50,12 @@
 <p>The chat-call and embeddings MI auth do NOT hit this gap — they're handled by the <code>authentication-managed-identity</code> policy and the <code>embeddings-backend-auth</code> attribute respectively, not the backend entity.</p>
 <h2 id="4-content-safety-is-real-protection-not-a-force-field">4. Content safety is real protection, not a force field</h2>
 <ul>
-<li><strong>Streaming responses:</strong> the policy buffers a sliding window and stops forwarding events on a violation, but does <strong>not</strong> return a 403. Clients see a truncated stream, not a clean block.</li>
-<li><strong>Languages:</strong> Prompt Shields is tuned for a limited set of languages and can misfire in others.</li>
-<li><strong>Separate service:</strong> it needs a standalone Azure AI Content Safety resource wired behind it (provisioned here).</li>
+<li><strong>Streaming responses:</strong> when a reply is streamed back word-by-word, the check watches a moving window of the text and, if it spots a violation, simply stops sending more — it does <strong>not</strong> return a clean &quot;blocked&quot; error (a 403). The client sees the reply cut off partway, not a tidy rejection.</li>
+<li><strong>Languages:</strong> the jailbreak / prompt-injection detector (Prompt Shields) is tuned for a limited set of languages and can get it wrong in others.</li>
+<li><strong>Separate service:</strong> it relies on a standalone Azure AI Content Safety resource wired in behind it (which this repo provisions).</li>
 </ul>
 <h2 id="5-semantic-caching-can-return-a-quotclose-but-wrongquot-answer">5. Semantic caching can return a &quot;close but wrong&quot; answer</h2>
-<p>Caching matches on <strong>vector similarity, not exact text</strong>, so a loose <code>score-threshold</code> can hand back an answer that is close but not quite right — or stale, or unsafe for the current request. Two mitigations baked in: (a) start the threshold tight (<code>0.05</code> — lower is stricter) and loosen carefully; (b) the safety screen runs <strong>before</strong> the cache lookup, so the incoming prompt is always screened. Caching is also not free — it needs its own Redis infrastructure.</p>
+<p>The cache reuses a past answer by <strong>matching on meaning, not exact wording</strong>, so if the match is allowed to be too loose (<code>score-threshold</code> set too high) it can hand back a reply that is close but not quite right — or out of date, or unsafe for this particular request. Two safeguards are built in: (a) start the threshold tight (<code>0.05</code> — lower means a stricter, closer match is required) and loosen it carefully; (b) the safety screen runs <strong>before</strong> the cache is checked, so the incoming text is always screened first. Caching also is not free — it needs its own Redis infrastructure (the cache store).</p>
 <h2 id="6-redisearch-must-be-enabled-at-cache-creation">6. RediSearch must be enabled at cache creation</h2>
 <p>Azure Managed Redis can only enable the <strong>RediSearch</strong> module when the cache is <strong>created</strong> — you cannot add it to an existing cache. <code>infra/modules/redis.bicep</code> sets it at creation; changing it later means recreating the cache.</p>
 <h2 id="7-mcp-governance-is-whole-server-not-per-tool">7. MCP governance is whole-server, not per-tool</h2>
@@ -66,52 +66,26 @@
 <p>Anthropic Messages support for <code>llm-token-limit</code> / semantic cache, and the unified doorway's OpenAI⇄Anthropic translation, require an <strong>APIM v2 tier</strong>. This repo is OpenAI-only by design and runs on Developer; adding Claude is a tier upgrade + a backend add — see <a href="runbooks/add-claude.html">runbooks/add-claude.md</a>. It is not a rearchitecture, but it is not free either.</p>
 <h2 id="10-preview-surfaces-will-change">10. Preview surfaces will change</h2>
 <p>MCP, A2A, and the unified model API are <strong>preview</strong>. Their management APIs are still moving and lack stable ARM/Bicep types, which is why they're provisioned via <code>scripts/provision-preview.*</code> rather than Bicep (<a href="adr/0003-preview-via-scripts.html">ADR-0003</a>). Treat them as a direction, not a finished contract; expect to update the scripts as the surfaces stabilise.</p>
-<h2 id="11-data-masking-covers-headers-and-query-params-not-promptcompletion-bodies">11. Data masking covers headers and query params — not prompt/completion bodies</h2>
+<h2 id="11-data-masking-covers-headers-and-query-params--not-promptcompletion-bodies">11. Data masking covers headers and query params — not prompt/completion bodies</h2>
 <p>The gateway's log-masking can only hide <strong>headers and URL parameters</strong> — verified across every version of the setting. It <strong>cannot</strong> strip personal data (PII) out of the prompt itself or the model's reply. So the <code>dataMasking</code> flag does what it can: it hides the credentials (<code>api-key</code>/<code>subscription-key</code>/<code>Authorization</code>) so they never land in logs (<code>infra/modules/llm-api.bicep</code>). Protecting the <em>content</em> of prompts is a different lever — whether you log the prompt/reply text at all (<code>promptLogging</code>): keep that <strong>off</strong> for sensitive business units (the <code>regulated</code> profile does), or add a rule that strips personal data out of the logs before they're stored. Bottom line: <code>dataMasking: true</code> does <strong>not</strong> scrub prompts — and nothing in the gateway does that automatically.</p>
 <h2 id="12-auto-throttling-on-overspend-needs-one-wiring-step">12. Auto-throttling on overspend needs one wiring step</h2>
 <p>The budget alert (<code>modules/secops.bicep</code>) is fully built — it detects overspend and emails you. But an alert only <strong>notifies</strong>; it can't change a setting on its own. To make an overspend automatically tighten the usage limit, you connect the included throttle script (<code>scripts/throttle.*</code>) to the alert (via an Azure Automation runbook or Logic App — see <a href="runbooks/secops-loop.html">runbooks/secops-loop.md</a>). Out of the box you get the alert, the email, and a one-command manual throttle; full automation is a documented wiring step, not a pre-built workflow (deliberately — a hand-rolled workflow is brittle for a reference repo). Also: <strong>Defender for APIs</strong> (threat protection) is billed per subscription, and switching it on for each individual API is a second step in the Azure portal after the plan is enabled.</p>
-<h2 id="13-workspaces-federation-need-a-v2-premium-tier">13. Workspaces (federation) need a v2 / Premium tier</h2>
-<p>The <code>workspaces</code> flag (Phase 4 federation) is supported on <strong>Basic v2 / Standard v2 /
-Premium / Premium v2 only</strong> — verified against the tier feature comparison. The seed
-defaults to <strong>Developer</strong>, which does <strong>not</strong> support workspaces, so deploying
-<code>workspaces: true</code> on Developer <strong>fails</strong>. Any profile that turns it on (<code>test</code>/<code>prod</code>/
-<code>regulated</code>) must set a v2/Premium SKU (<code>APIM_SKU=StandardV2</code> or <code>PremiumV2</code>). The global
-policy floor and <code>entraAuth</code> work on every tier; only the workspaces half carries this
-requirement. Also: a workspace collaborator needs <strong>both</strong> a workspace-scoped and a
-service-scoped role, and MCP/A2A preview surfaces aren't supported inside workspaces yet.
-See <a href="runbooks/federation.html">runbooks/federation.md</a>.</p>
+<h2 id="13-workspaces-federation-need-a-v2--premium-tier">13. Workspaces (federation) need a v2 / Premium tier</h2>
+<p>Federation means giving each business unit its own walled-off area inside the gateway (a &quot;workspace&quot;). That <code>workspaces</code> capability (Phase 4) only runs on the <strong>Basic v2 / Standard v2 / Premium / Premium v2</strong> pricing tiers — verified against the tier feature comparison. The starting setup defaults to <strong>Developer</strong>, which does <strong>not</strong> support workspaces, so deploying with <code>workspaces: true</code> on Developer <strong>fails</strong>. Any profile that turns it on (<code>test</code>/<code>prod</code>/<code>regulated</code>) must choose a v2 or Premium tier (<code>APIM_SKU=StandardV2</code> or <code>PremiumV2</code>). The baseline policy that applies everywhere and <code>entraAuth</code> (sign-in) work on every tier; only the workspaces piece carries this requirement. Two more things: a person working inside a workspace needs <strong>two</strong> roles — one scoped to the workspace and one scoped to the whole service — and the preview features (MCP tools and A2A agents) aren't supported inside workspaces yet. See <a href="runbooks/federation.html">runbooks/federation.md</a>.</p>
 <h2 id="14-reliability-needs-premium-class-tiers-and-multi-region-multiplies-the-quota">14. Reliability needs Premium-class tiers, and multi-region multiplies the quota</h2>
-<p>The Phase 5 gateway-resilience flags carry tier and accounting consequences:</p>
+<p>The Phase 5 flags that keep the gateway running through failures come with tier and budget consequences:</p>
 <ul>
-<li><strong><code>availabilityZones</code></strong> needs Premium / Premium v2; <strong><code>multiRegion</code></strong> needs <strong>Premium
-(classic) only</strong>. The Developer seed supports neither — these flags <strong>fail</strong> on Developer,
-so enabling them requires <code>APIM_SKU=Premium</code>/<code>PremiumV2</code>. (<code>modelFailover</code> works on any tier.)</li>
-<li><strong>Multi-region vs multi-provider is an either/or today:</strong> Premium classic gives multi-region
-but not the v2-only unified doorway/Claude; v2 gives the doorway but not multi-region. A
-current Azure limit — pick by priority (<a href="enterprise/target-architecture.html#3-tier-decision-the-load-bearing-choice">target-architecture §3</a>).</li>
-<li><strong>Token quota counts per region</strong> (see §1): turn on <code>multiRegion</code> and a 1M/month cap becomes
-1M × regions. Do the per-region math.</li>
-<li><strong>Multi-region + network isolation</strong> needs a subnet + public IP per added region in the
-<code>additionalLocations</code> objects — not auto-derived. With one OpenAI account the failover pool
-has one member (the circuit breaker still protects it); active-active needs a second region's
-backend. See <a href="runbooks/reliability.html">runbooks/reliability.md</a>.</li>
+<li><strong><code>availabilityZones</code></strong> (surviving a data-center outage within a region) needs Premium / Premium v2; <strong><code>multiRegion</code></strong> (running in more than one geographic region) needs <strong>Premium (classic) only</strong>. The Developer starting tier supports neither — these flags <strong>fail</strong> on Developer, so enabling them requires <code>APIM_SKU=Premium</code>/<code>PremiumV2</code>. (<code>modelFailover</code> works on any tier.)</li>
+<li><strong>Multi-region and multi-provider are an either/or today:</strong> Premium classic gives you multi-region but not the v2-only unified front door or Claude; v2 gives you that front door but not multi-region. This is a current Azure limitation — pick based on which matters more (<a href="enterprise/target-architecture.html#3-tier-decision-the-load-bearing-choice">target-architecture §3</a>).</li>
+<li><strong>The monthly budget cap counts per region</strong> (see §1): turn on <code>multiRegion</code> and a 1M-tokens/month cap becomes 1M × the number of regions. Do the per-region math.</li>
+<li><strong>Multi-region plus network isolation</strong> needs a network segment (subnet) and a public IP address for each added region, set in the <code>additionalLocations</code> objects — these are not filled in automatically. With a single OpenAI account the failover pool has only one member (an auto-cutoff that stops sending traffic to a failing backend — a &quot;circuit breaker&quot; — still protects it); running two regions live at once needs a second region's backend. See <a href="runbooks/reliability.html">runbooks/reliability.md</a>.</li>
 </ul>
 <h2 id="15-multi-provider-is-preview-v2-only-and-needs-the-doorway-to-fail-over">15. Multi-provider is preview, v2-only, and needs the doorway to fail over</h2>
-<p>The <code>multiProvider</code> capability (unified doorway + Claude/Gemini governance) is <strong>preview and
-v2-only</strong>, so it ships as a guided script (<a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/scripts/provision-preview.sh">provision-preview</a>)</p>
+<p>The <code>multiProvider</code> capability (the unified front door plus governance for Claude/Gemini) is <strong>not yet final (preview) and v2-only</strong>, so it ships as a guided script (<a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/scripts/provision-preview.sh">provision-preview</a>) plus a <a href="runbooks/multi-provider.html">runbook</a> rather than as Azure deployment templates (Bicep) (<a href="adr/0009-multi-provider.html">ADR-0009</a>). Three things to know:</p>
 <ul>
-<li>the <a href="runbooks/multi-provider.html">runbook</a>, not Bicep (<a href="adr/0009-multi-provider.html">ADR-0009</a>).
-Three things to know:</li>
-</ul>
-<ul>
-<li><strong>It excludes multi-region</strong> in one instance (v2 vs Premium classic — see §14 / §3). For both,
-run separate instances behind one edge.</li>
-<li><strong>Cross-provider failover requires the doorway's format translation.</strong> You cannot drop Claude
-into the Phase-5 OpenAI pool and expect failover — the wire formats differ. Same-provider
-failover is the GA pool; cross-provider is the preview doorway.</li>
-<li><strong>The provider key lives in Key Vault</strong> (<code>useKeyVault</code>), referenced by a KV-reference named
-value created post-deploy (the secret must exist before the reference, so it can't be pure
-Bicep). Never put the key in a template.</li>
+<li><strong>It rules out multi-region</strong> within a single instance (v2 versus Premium classic — see §14 / §3). To get both, run separate instances behind one shared entry point.</li>
+<li><strong>Failing over from one provider to another only works through the front door's format translation.</strong> You cannot drop Claude into the Phase-5 OpenAI failover pool and expect it to work — the providers speak different wire formats. Failover between two backends of the <em>same</em> provider is the production-ready (generally available, &quot;GA&quot;) pool; failover <em>across</em> providers goes through the preview front door.</li>
+<li><strong>The provider's secret key lives in Azure Key Vault</strong> (<code>useKeyVault</code>), pointed to by a Key Vault reference that is created after deployment (the secret has to exist before the reference can point at it, so this step can't be pure Bicep). Never put the key directly in a template.</li>
 </ul>
 <h2 id="16-cost-and-sla-reality">16. Cost and SLA reality</h2>
 <p>Deploying costs real money. <strong>Developer</strong> APIM ≈ $50/mo with <strong>no SLA</strong> and ~30–45 min provisioning. <strong>StandardV2</strong> ≈ several hundred $/mo. Add Azure Managed Redis and Content Safety on top. The repo is deploy-ready; deciding to deploy is a deliberate, cost-incurring action.</p>

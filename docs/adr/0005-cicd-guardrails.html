@@ -37,43 +37,43 @@
 <main class="content"><div class="wrap">
 <p><strong>Status:</strong> Accepted · <strong>Date:</strong> 2026-06-25</p>
 <h2 id="context">Context</h2>
-<p>Principle 5 of the <a href="../enterprise/target-architecture.html">target architecture</a> is
-&quot;policy-as-code, change-controlled — no portal edits in production.&quot; That is only real if
-two things exist: a pipeline that is the <em>only</em> write path to a deployed gateway, and a
-detector that catches edits made around it. This is Phase 2 (<code>pipelineGuardrails</code>).</p>
+<p>Principle 5 of the <a href="../enterprise/target-architecture.html">target architecture</a> says the
+gateway's rules live as version-controlled files and only change through a reviewed process —
+&quot;no hand edits in the Azure portal in production.&quot; That promise is only real if two things
+exist: an automated release process that is the <em>only</em> way changes reach a live gateway, and a
+watchdog that catches any edits someone makes around it. This is Phase 2 (<code>pipelineGuardrails</code>).</p>
 <h2 id="decision">Decision</h2>
 <ul>
-<li><strong>GitHub Actions</strong>, not Azure DevOps — the repo's GitHub-native and <code>gh</code> is the standard tool here.</li>
-<li><strong>OIDC federated credentials</strong>, no stored cloud secrets — a short-lived token per environment (rules/security.md).</li>
-<li><strong>Staged promotion</strong> <code>dev → test → prod</code> via a reusable per-stage workflow; <code>test</code>/<code>prod</code> are
-GitHub <strong>Environments</strong> with required-reviewer rules — the approval gate is platform-enforced,
-not convention.</li>
-<li><strong>what-if before every apply</strong>; <strong>smoke-test gates promotion</strong> (a control regression stops the rollout).</li>
-<li><strong>Scheduled drift detection</strong> runs the repo as a what-if against live environments; mutating
-changes fail the job and open a tracked issue.</li>
-<li><strong>Structural policy lint, not DOM validation.</strong></li>
+<li><strong>GitHub Actions</strong> for the release process, not Azure DevOps — the repo lives on GitHub and <code>gh</code> is the standard tool here.</li>
+<li><strong>No stored cloud passwords.</strong> Each environment signs in with a short-lived, automatically issued token (OIDC federated credentials — see rules/security.md).</li>
+<li><strong>Step-by-step promotion</strong> <code>dev → test → prod</code>, using one reusable workflow per stage. The <code>test</code> and <code>prod</code> stages are GitHub <strong>Environments</strong> that require a named reviewer to approve — the sign-off gate is enforced by the platform, not just by convention.</li>
+<li><strong>A dry run before every change</strong> (a &quot;what-if&quot; preview), and a <strong>smoke test that must pass before promotion</strong> — if a control breaks, the rollout stops.</li>
+<li><strong>A scheduled drift check</strong> compares the version-controlled files against the live environments; any change made outside the process fails the job and opens a tracked issue.</li>
+<li><strong>A structural rules check, not a strict XML parse</strong> (explained below).</li>
 </ul>
 <h2 id="rationale-for-the-structural-linter">Rationale for the structural linter</h2>
-<p>APIM policy XML is not well-formed XML: expression attributes embed C# with nested double
-quotes, e.g. <code>counter-key=&quot;@(context.Subscription?.Id ?? &quot;anonymous&quot;)&quot;</code>. <code>xmllint</code> / ElementTree
-would reject every valid policy. So <code>scripts/lint-policies.*</code> checks structure instead — sections
-present and closed, <code>&lt;base /&gt;</code> inheritance in each section, balanced <code>{{named-value}}</code> tokens, no
-hardcoded secrets. The <code>&lt;base /&gt;</code> check is the CI mirror of the Azure Policy <em>&quot;policies should
-inherit parent scope using <code>&lt;base/&gt;</code>&quot;</em>, so a BU/workspace policy can't strip a central control —
-caught at PR time, not just at runtime.</p>
+<p>The API gateway's (Azure API Management, &quot;APIM&quot;) policy files look like XML but aren't valid XML: the rule expressions embed C# code with
+quotes inside quotes, e.g. <code>counter-key=&quot;@(context.Subscription?.Id ?? &quot;anonymous&quot;)&quot;</code>. A standard
+XML parser (<code>xmllint</code> / ElementTree) would reject every valid policy. So <code>scripts/lint-policies.*</code>
+checks the structure instead — sections present and closed, each section pulls in its parent rules
+via the required <code>&lt;base /&gt;</code> tag, the <code>{{named-value}}</code> placeholders are balanced, and no secrets are
+hardcoded. That <code>&lt;base /&gt;</code> check mirrors the Azure Policy rule <em>&quot;policies should inherit parent scope
+using <code>&lt;base/&gt;</code>&quot;</em>, so a business-unit or walled-off area's rules can't quietly remove a central
+control — it's caught when the change is proposed (at pull-request time), not only once it's live.</p>
 <h2 id="the-flag-is-informational-by-design">The flag is informational, by design</h2>
-<p><code>pipelineGuardrails</code> does <strong>not</strong> gate a Bicep module — CI/CD is outside the deployment. It is a
-declaration that an environment is change-controlled (used for compliance assertions), not an
-infrastructure switch. Documented in the <a href="../runbooks/ci-cd-pipeline.html">runbook</a> so no one
-expects flipping it to create the pipeline. The pipeline is the <code>.github/workflows/</code> files plus
-branch/environment protection.</p>
+<p><code>pipelineGuardrails</code> does <strong>not</strong> switch on any deployed infrastructure — the release process lives
+outside the deployment. The flag simply records that an environment is change-controlled (useful for
+compliance statements); it is not an on/off switch for anything built in Azure. This is spelled out
+in the <a href="../runbooks/ci-cd-pipeline.html">runbook</a> so no one expects flipping it to create the release
+process. The actual process is the <code>.github/workflows/</code> files plus the branch and environment
+protection rules.</p>
 <h2 id="consequences">Consequences</h2>
 <ul>
 <li>Merges to <code>main</code> require green <code>validate</code>; deploys require approvals; prod has no portal write path.</li>
 <li>One-time setup cost: federated credentials + GitHub Environments + branch protection (runbook §&quot;One-time setup&quot;).</li>
 <li>The same lint/drift scripts run locally, so developers catch issues before pushing.</li>
-<li>When workspaces land (Phase 4), the <code>&lt;base /&gt;</code> lint and the Azure Policy enforce the same
-inheritance invariant from two directions.</li>
+<li>When the walled-off areas per business unit (workspaces) arrive in Phase 4, the <code>&lt;base /&gt;</code> check
+and the Azure Policy rule enforce the same inheritance guarantee from two directions.</li>
 </ul>
 
 </div></main>

@@ -37,10 +37,13 @@
 <main class="content"><div class="wrap">
 <p>GA control. See <a href="../architecture.html">architecture</a> and <a href="../caveats.html">caveats</a>.</p>
 <h2 id="what-it-controls">What it controls</h2>
-<p>Screens prompts (and optionally completions) through Azure AI Content Safety / Prompt
-Shields before they reach the model. For an agent fleet this catches two things humans
-can't review at scale: direct jailbreak attempts, and <strong>indirect prompt injection</strong>
-hidden inside tool output or RAG content that an agent is about to act on.</p>
+<p>This is the safety screen. It checks the text going into the model (and, optionally, the
+model's reply) through Azure AI Content Safety and the jailbreak / prompt-injection
+detector (Prompt Shields) before that text reaches the model. For a fleet of AI agents it
+catches two things no human team could review at the same volume: direct jailbreak attempts
+(tricking the model into ignoring its rules), and <strong>indirect prompt injection</strong> — malicious
+instructions hidden inside tool output or retrieved documents (RAG content) that an agent is
+about to act on.</p>
 <h2 id="the-policy">The policy</h2>
 <p>From <code>infra/policies/llm-governance.xml</code> (inbound, before cache lookup):</p>
 <pre><code class="language-xml">&lt;llm-content-safety
@@ -68,21 +71,23 @@ when <code>threshold=&quot;4&quot;</code>.</li>
 <li>Policy: <code>infra/policies/llm-governance.xml</code>.</li>
 <li>Azure AI Content Safety resource provisioned in
 <code>infra/modules/content-safety.bicep</code>; <code>disableLocalAuth=true</code>.</li>
-<li>APIM's system-assigned MI gets <strong>Cognitive Services User</strong> on the account
-(<code>infra/modules/rbac.bicep</code>).</li>
-<li><strong>Known IaC gap:</strong> the content-safety backend's managed-identity auth is <strong>not
-expressible</strong> in the ARM/Bicep backend schema (even <code>2025-09-01-preview</code> <code>credentials</code>
-has no <code>managedIdentity</code> field). So the backend is created <strong>URL-only</strong> in Bicep and MI
-auth is applied post-deploy by <code>scripts/configure-backend-auth.{sh,ps1}</code> — or one portal
-toggle: <em>Backends → content-safety-backend → Authorization credentials → Managed
-identity → System assigned → Resource ID <code>https://cognitiveservices.azure.com</code></em>.</li>
+<li>The API gateway (Azure API Management, &quot;APIM&quot;) signs in to the safety service using its
+own Azure-issued identity (a managed identity — no stored password), which is granted the
+<strong>Cognitive Services User</strong> role on the account (<code>infra/modules/rbac.bicep</code>).</li>
+<li><strong>Known infrastructure-as-code gap:</strong> Azure's deployment templates (ARM/Bicep) cannot
+express this managed-identity sign-in for the safety backend — even the newest schema
+(<code>2025-09-01-preview</code> <code>credentials</code>) has no <code>managedIdentity</code> field. So the backend is
+created <strong>URL-only</strong> in Bicep, and the sign-in is wired up after deployment by
+<code>scripts/configure-backend-auth.{sh,ps1}</code> — or by one portal toggle: <em>Backends →
+content-safety-backend → Authorization credentials → Managed identity → System assigned →
+Resource ID <code>https://cognitiveservices.azure.com</code></em>.</li>
 </ul>
 <h2 id="how-to-verify">How to verify</h2>
 <ol>
 <li>Run <code>scripts/smoke-test.{sh,ps1}</code> with a benign prompt → <code>200</code>.</li>
 <li>Send a known jailbreak / disallowed prompt → expect <strong><code>403</code></strong>.</li>
-<li>If you get a <code>401/403</code> from the backend itself, the MI auth step was skipped — run
-<code>scripts/configure-backend-auth.{sh,ps1}</code>.</li>
+<li>If you get a <code>401/403</code> from the backend itself, the post-deploy sign-in step was skipped
+— run <code>scripts/configure-backend-auth.{sh,ps1}</code>.</li>
 </ol>
 <h2 id="caveats">Caveats</h2>
 <ul>

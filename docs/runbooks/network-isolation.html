@@ -38,13 +38,13 @@
 <p>Locks the AI backends (Azure OpenAI, Content Safety, Redis) so they have no public internet address at all — the only thing that can reach them is the API gateway (Azure API Management, &quot;APIM&quot;), over a private network. This closes the &quot;someone bypasses the gateway&quot; risk. It's the <code>networkIsolation</code> flag.</p>
 <h2 id="what-it-deploys-when-on">What it deploys (when on)</h2>
 <ul>
-<li>A <strong>VNet</strong> (<code>modules/network.bicep</code>) with an APIM subnet (classic injection: no delegation) and a private-endpoints subnet, each with an NSG.</li>
-<li><strong>Private DNS zones</strong> (<code>privatelink.openai.azure.com</code>, <code>privatelink.cognitiveservices.azure.com</code>, <code>privatelink.redis.azure.net</code>) + VNet links.</li>
-<li><strong>Private endpoints</strong> for Azure OpenAI, Content Safety, and Azure Managed Redis (<code>modules/private-endpoint.bicep</code>).</li>
-<li><code>publicNetworkAccess: Disabled</code> + <code>networkAcls.defaultAction: Deny</code> on Azure OpenAI and Content Safety.</li>
-<li>APIM <strong>classic VNet injection</strong> (<code>virtualNetworkType</code> = <code>External</code> by default, or <code>Internal</code>).</li>
+<li>A <strong>private network</strong> (a &quot;VNet&quot;, <code>modules/network.bicep</code>) with one subnet for the gateway (classic injection: no delegation) and one for the private connections, each protected by subnet firewall rules (an &quot;NSG&quot;).</li>
+<li><strong>Private DNS zones</strong> (<code>privatelink.openai.azure.com</code>, <code>privatelink.cognitiveservices.azure.com</code>, <code>privatelink.redis.azure.net</code>) plus links into the private network, so names resolve to the private addresses.</li>
+<li><strong>Private-only connections</strong> (private endpoints) for Azure OpenAI, Content Safety, and Azure Managed Redis (<code>modules/private-endpoint.bicep</code>).</li>
+<li><code>publicNetworkAccess: Disabled</code> + <code>networkAcls.defaultAction: Deny</code> on Azure OpenAI and Content Safety — both settings shut off the public door.</li>
+<li>The gateway placed inside the private network via <strong>classic VNet injection</strong> (<code>virtualNetworkType</code> = <code>External</code> by default, or <code>Internal</code>).</li>
 </ul>
-<p>With public access disabled, the Azure OpenAI endpoint is useless without the private path — the bypass risk is closed.</p>
+<p>With public access turned off, the Azure OpenAI endpoint can't be reached at all except over the private path — so the bypass risk is closed.</p>
 <h2 id="how-to-turn-it-on">How to turn it on</h2>
 <pre><code class="language-bash"># via profile (test/prod/regulated default it on)
 azd env set GOV_PROFILE test
@@ -54,20 +54,20 @@ azd up
 az deployment sub create -l eastus2 -f infra/main.bicep \
   -p infra/main.parameters.json -p flagOverrides='{&quot;networkIsolation&quot;:true}'
 </code></pre>
-<p><code>dev</code> (default) leaves it off, preserving the simple public seed for quick demos.</p>
+<p><code>dev</code> (the default) leaves it off, keeping the simple public starting template for quick demos.</p>
 <h2 id="validate-before-production">⚠ Validate before production</h2>
-<p>These are environment-/tier-/cloud-sensitive and the <code>bicep build</code> cannot check them semantically:</p>
+<p>These settings depend on your environment, tier, and Azure cloud, and <code>bicep build</code> can't check whether they're correct for your case — only that they're syntactically valid:</p>
 <ol>
-<li><strong>APIM-subnet NSG rules</strong> (<code>modules/network.bicep</code>) are the standard classic-injection set (mgmt 3443 from <code>ApiManagement</code>, LB 6390, gateway 443; outbound to Storage/KeyVault/Entra/Monitor). Reconcile against the current <a href="https://learn.microsoft.com/azure/api-management/virtual-network-reference">Virtual network configuration reference: API Management</a> for your tier before prod — they change with platform updates.</li>
-<li><strong>Private DNS zone names</strong> — confirm for your cloud. The <strong>Azure Managed Redis</strong> zone in particular (<code>privatelink.redis.azure.net</code> here) should be verified against your <code>redisEnterprise</code> deployment; override via the <code>privateDnsZoneNames</code> param if different.</li>
-<li><strong>Tier vs networking mode</strong> — classic injection (implemented here) is <strong>Developer / Premium</strong>. For <strong>Standard v2 / Premium v2</strong>, use VNet <em>integration</em> (subnet delegated to <code>Microsoft.Web/serverFarms</code>) or Premium v2 <em>injection</em> (<code>Microsoft.Web/hostingEnvironments</code>); see <a href="../enterprise/target-architecture.html#4-network-isolation-enablenetworkisolation">enterprise/target-architecture §4</a>. Injection on Premium v2 is <strong>create-time only</strong>.</li>
-<li><strong>External vs Internal</strong> — <code>External</code> keeps the gateway publicly reachable (simplest, good for validation). <code>Internal</code> makes the gateway private; front it with Azure Front Door / Application Gateway + WAF (the <code>edgeWaf</code> flag, Phase 1b).</li>
+<li><strong>The gateway subnet's firewall rules</strong> (<code>modules/network.bicep</code>) are the standard set for classic injection (management on 3443 from <code>ApiManagement</code>, load balancer on 6390, gateway on 443; outbound to Storage/KeyVault/Entra/Monitor). Reconcile them against the current <a href="https://learn.microsoft.com/azure/api-management/virtual-network-reference">Virtual network configuration reference: API Management</a> for your tier before production — Microsoft changes them with platform updates.</li>
+<li><strong>Private DNS zone names</strong> — confirm them for your cloud. The <strong>Azure Managed Redis</strong> zone in particular (<code>privatelink.redis.azure.net</code> here) should be checked against your <code>redisEnterprise</code> deployment; override it with the <code>privateDnsZoneNames</code> parameter if it differs.</li>
+<li><strong>Tier vs networking mode</strong> — classic injection (what's implemented here) works on <strong>Developer / Premium</strong>. For <strong>Standard v2 / Premium v2</strong>, use VNet <em>integration</em> instead (subnet delegated to <code>Microsoft.Web/serverFarms</code>) or Premium v2 <em>injection</em> (<code>Microsoft.Web/hostingEnvironments</code>); see <a href="../enterprise/target-architecture.html#4-network-isolation-enablenetworkisolation">enterprise/target-architecture §4</a>. On Premium v2, injection can only be set when the instance is first created.</li>
+<li><strong>External vs Internal</strong> — <code>External</code> keeps the gateway reachable from the public internet (simplest, good for validation). <code>Internal</code> makes the gateway fully private; in that case put a web entry point with a web application firewall in front of it (Azure Front Door or Application Gateway + WAF — the <code>edgeWaf</code> flag, Phase 1b).</li>
 </ol>
 <h2 id="verify-after-deploy">Verify after deploy</h2>
 <ul>
-<li>Confirm <code>publicNetworkAccess = Disabled</code> on the OpenAI + Content Safety accounts.</li>
-<li>From outside the VNet, the OpenAI data-plane endpoint should now reject (no public route).</li>
-<li><code>scripts/smoke-test.*</code> run from a host with VNet line-of-sight (or through the gateway) should still pass — proving APIM reaches the backends privately while the public path is gone.</li>
+<li>Confirm <code>publicNetworkAccess = Disabled</code> on the OpenAI and Content Safety accounts.</li>
+<li>From outside the private network, the OpenAI data endpoint should now refuse the connection (there's no public route to it).</li>
+<li><code>scripts/smoke-test.*</code>, run from a host that can see the private network (or through the gateway), should still pass — proving the gateway still reaches the backends privately even though the public path is gone.</li>
 </ul>
 
 </div></main>

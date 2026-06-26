@@ -4,9 +4,13 @@ GA control. See [architecture](../architecture.md) and [caveats](../caveats.md).
 
 ## What it controls
 
-Returns a cached completion when an incoming prompt is *semantically similar* to a prior
-one — not just byte-identical. Agents re-ask near-duplicate questions constantly; serving
-those from cache cuts token spend and latency. Lookup runs inbound; store runs outbound.
+This control saves money and time by reusing past answers. When a new request means roughly
+the same thing as one already answered, it returns the saved reply instead of paying the
+model again. The key word is *meaning*: it matches on meaning, not exact wording, so a
+reworded version of an earlier question still counts as a match. AI agents ask near-duplicate
+questions constantly, so serving those from this saved store ("cache") cuts both token spend
+(tokens are the unit models bill by) and the wait for a reply (latency). The check happens on
+the way in; saving a fresh answer happens on the way out.
 
 ## The policy
 
@@ -27,17 +31,21 @@ From `infra/policies/llm-governance.xml`:
 <llm-semantic-cache-store duration="3600" />
 ```
 
-`score-threshold`: **lower = stricter** match. Start tight — default `0.05`.
-`vary-by` subscription so teams cannot read each other's cached answers.
+`score-threshold` sets how close a match has to be: **lower = stricter**. Start tight —
+default `0.05` — and loosen carefully. `vary-by` keys the saved answers to each team's
+subscription, so teams cannot read each other's cached replies.
 
 ## How it's wired in this repo
 
 - Policy: `infra/policies/llm-governance.xml`.
-- Azure Managed Redis (with the **RediSearch** module) provisioned in
-  `infra/modules/redis.bicep` and registered as the APIM external cache.
+- Azure Managed Redis — the cache store — with **RediSearch** (the search feature that
+  compares meaning) turned on, provisioned in `infra/modules/redis.bicep` and registered as
+  the external cache for the API gateway (Azure API Management, "APIM").
 - `text-embedding-3-small` deployment (`embeddings`) on the Azure OpenAI account
-  (`infra/modules/openai.bicep`), surfaced as the `embeddings-backend` whose MI auth is
-  the `embeddings-backend-auth="system-assigned"` attribute.
+  (`infra/modules/openai.bicep`) — this is what converts text into the numeric form the
+  meaning-match compares. It is surfaced as the `embeddings-backend`, which signs in with an
+  Azure-issued identity the service owns (no stored password) via the
+  `embeddings-backend-auth="system-assigned"` attribute.
 - `cache-score-threshold` is a named value — tune via
   [runbooks/tune-cache](../runbooks/tune-cache.md).
 

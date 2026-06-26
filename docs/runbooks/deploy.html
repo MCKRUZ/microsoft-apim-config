@@ -38,25 +38,25 @@
 <p>Provisions the full AI-governance gateway. See <a href="../architecture.html">architecture</a>.</p>
 <h2 id="prerequisites">Prerequisites</h2>
 <ul>
-<li><strong>Azure CLI</strong> (<code>az</code>), logged in to the target subscription.</li>
-<li><strong>azd</strong> (Azure Developer CLI).</li>
-<li>An <strong>Azure subscription</strong> with rights to deploy at subscription scope.</li>
-<li>Quota for <strong>Cognitive Services</strong> (Azure OpenAI + Content Safety) and <strong>APIM</strong> in the
+<li><strong>Azure CLI</strong> (<code>az</code>), the Azure command-line tool, logged in to the target subscription.</li>
+<li><strong>azd</strong> (Azure Developer CLI), the higher-level tool that wraps a full deploy in one command.</li>
+<li>An <strong>Azure subscription</strong> with rights to deploy across the whole subscription.</li>
+<li>Enough quota for <strong>Cognitive Services</strong> (Azure OpenAI + Content Safety) and the API gateway (Azure API Management, &quot;APIM&quot;) in the
 target region.</li>
 </ul>
 <h2 id="resources-provisioned">Resources provisioned</h2>
-<p>APIM, Azure OpenAI (<code>gpt-4o</code> deployment <code>chat</code> + <code>text-embedding-3-small</code> deployment
+<p>The API gateway (APIM), Azure OpenAI (<code>gpt-4o</code> deployment <code>chat</code> + <code>text-embedding-3-small</code> deployment
 <code>embeddings</code>), Azure Managed Redis (RediSearch), Azure AI Content Safety, Log Analytics +
-App Insights, and two demo team products/subscriptions: <code>team-research</code>, <code>team-platform</code>.</p>
+App Insights for monitoring, and two demo team products/subscriptions: <code>team-research</code>, <code>team-platform</code>.</p>
 <h2 id="deploy-with-azd-default">Deploy with azd (default)</h2>
 <pre><code class="language-bash">azd up
 </code></pre>
 <ul>
-<li>Provisions Bicep at <strong>subscription scope</strong> (creates resource group <code>rg-&lt;env&gt;</code>).</li>
-<li>Default tier is <strong>Developer</strong> (~$50/mo, <strong>no SLA</strong>, ~<strong>30–45 min</strong> to provision).
-Developer supports the entire OpenAI-only showcase including the preview surfaces.</li>
-<li>The <strong>postprovision hook runs <code>scripts/provision-preview.*</code></strong> to stand up the preview
-surfaces (MCP, A2A, unified API) that lack stable Bicep types.</li>
+<li>Deploys across the whole subscription (creates resource group <code>rg-&lt;env&gt;</code>).</li>
+<li>The default tier is <strong>Developer</strong> (~$50/mo, <strong>no service-level guarantee</strong>, ~<strong>30–45 min</strong> to provision).
+Developer is enough to run the entire OpenAI-only showcase, including the not-yet-final (preview) features.</li>
+<li>After provisioning, a <strong>post-deploy hook runs <code>scripts/provision-preview.*</code></strong> to set up the preview
+features — the standard agents use to reach tools (MCP), agent-to-agent (A2A), and the unified API — which don't yet have stable Bicep definitions.</li>
 </ul>
 <h2 id="fallback-no-azd">Fallback (no azd)</h2>
 <pre><code class="language-bash">az deployment sub create \
@@ -65,16 +65,15 @@ surfaces (MCP, A2A, unified API) that lack stable Bicep types.</li>
   -p infra/main.parameters.json
 </code></pre>
 <p>After a fallback deploy, run <code>scripts/provision-preview.*</code> and
-<code>scripts/configure-backend-auth.*</code> manually (azd's postprovision hook is skipped).</p>
+<code>scripts/configure-backend-auth.*</code> by hand (the azd post-deploy hook only runs under <code>azd up</code>).</p>
 <h2 id="backend-mi-auth-required">Backend MI auth (required)</h2>
-<p>The content-safety backend is created <strong>URL-only</strong> in Bicep — its managed-identity auth
-is not expressible in the ARM/Bicep schema. Apply it post-deploy:</p>
+<p>The content-safety backend is created with <strong>only its URL</strong> in Bicep, because its sign-in method — an Azure-issued identity the service owns, with no stored password — can't be expressed in the Bicep/ARM templates. Set it up after the deploy:</p>
 <pre><code class="language-bash">scripts/configure-backend-auth.sh    # or .ps1 on Windows
 </code></pre>
 <p>(Portal equivalent: <em>Backends → content-safety-backend → Authorization credentials →
 Managed identity → System assigned → Resource ID <code>https://cognitiveservices.azure.com</code></em>.)
 See <a href="../controls/content-safety.html">content-safety</a>.</p>
-<h2 id="find-the-gateway-url-a-team-key">Find the gateway URL + a team key</h2>
+<h2 id="find-the-gateway-url--a-team-key">Find the gateway URL + a team key</h2>
 <pre><code class="language-bash"># Gateway URL
 az apim show -g rg-&lt;env&gt; -n &lt;apim-name&gt; --query gatewayUrl -o tsv
 
@@ -86,10 +85,10 @@ az apim subscription show -g rg-&lt;env&gt; --service-name &lt;apim-name&gt; \
 <pre><code>POST https://&lt;apim&gt;.azure-api.net/openai/deployments/chat/chat/completions?api-version=2024-10-21
 Header: api-key: &lt;subscription-key&gt;
 </code></pre>
-<h2 id="soft-delete-purge-note">Soft-delete / purge note</h2>
-<p>Cognitive Services (OpenAI, Content Safety) and APIM <strong>soft-delete</strong> on deletion.
-Redeploying with the <strong>same names</strong> may require <strong>purging</strong> the soft-deleted resources
-first, or the deploy will fail on name conflict.</p>
+<h2 id="soft-delete--purge-note">Soft-delete / purge note</h2>
+<p>When you delete Cognitive Services (OpenAI, Content Safety) and the API gateway (APIM), Azure doesn't remove them immediately — it keeps them in a recoverable &quot;soft-deleted&quot; state for a while.
+If you redeploy with the <strong>same names</strong>, you may first have to <strong>purge</strong> (permanently remove) those soft-deleted resources,
+or the new deploy will fail because the names are still taken.</p>
 
 </div></main>
 <footer class="foot"><div class="wrap">

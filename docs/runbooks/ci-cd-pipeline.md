@@ -12,26 +12,23 @@ This is the `pipelineGuardrails` capability.
 | [`deploy.yml`](../../.github/workflows/deploy.yml) → [`_deploy-stage.yml`](../../.github/workflows/_deploy-stage.yml) | push to `main` / manual | staged **dev → test → prod**, each: what-if → deploy → smoke-test; `test`/`prod` gated by required reviewers |
 | [`drift.yml`](../../.github/workflows/drift.yml) | nightly cron / manual | what-if the repo against live `test` + `prod`; any mutating change → fail + file a `drift` issue |
 
-Two scripts back these and run locally too:
-- [`scripts/lint-policies.sh`](../../scripts/lint-policies.sh) / `.ps1` — structural policy lint.
-- [`scripts/drift-detect.sh`](../../scripts/drift-detect.sh) / `.ps1` — what-if drift check (exit 2 = drift).
+Two scripts power these checks, and you can also run them on your own machine:
+- [`scripts/lint-policies.sh`](../../scripts/lint-policies.sh) / `.ps1` — checks that each policy file is well-formed.
+- [`scripts/drift-detect.sh`](../../scripts/drift-detect.sh) / `.ps1` — runs a dry-run that flags anything changed by hand, outside the pipeline (a "drift" check; exit code 2 means drift was found).
 
 ## Why these specific gates
 
-- **Warnings-as-errors on `bicep build`** — the seed compiles clean; this keeps it that way so lint debt can't accrete unnoticed.
-- **Structural policy lint, not XML validation** — APIM policy expressions embed C# with nested double quotes (`@(context.Subscription?.Id ?? "anonymous")`), which is *not* well-formed XML. A DOM parser would raise false failures, so the linter checks structure (sections present, `<base />` inheritance, balanced `{{tokens}}`, no hardcoded secrets) instead. The `<base />` check mirrors the Azure Policy *"API Management policies should inherit parent scope using `<base/>`"* — a workspace/BU policy can never silently strip a central control.
-- **what-if before every apply** — the resource delta is in the run log before anything mutates; on a PR it's informational, on a deploy it's the plan.
-- **smoke-test gates promotion** — `scripts/smoke-test.sh` fires a jailbreak, an over-cap call, and a cache-hit pair at the just-deployed stage. A control regression stops the rollout before it reaches prod.
-- **Drift detection** — telemetry can't tell you someone hand-edited a policy in the portal; a scheduled what-if can. Drift fails the job and opens an issue so it's owned, not silently re-applied.
+- **Warnings-as-errors on `bicep build`** — the starting template (the "seed") compiles with zero warnings, and this rule keeps it that way so small quality problems can't pile up unnoticed.
+- **Structural policy lint, not XML validation** — the gateway's policy rules embed C# code with nested double quotes (`@(context.Subscription?.Id ?? "anonymous")`), so they are *not* valid XML. A strict XML parser would report false failures, so the linter checks structure instead: required sections are present, the `<base />` inheritance tag is there, `{{tokens}}` are balanced, and no secrets are hardcoded. That `<base />` check mirrors the built-in Azure rule *"API Management policies should inherit parent scope using `<base/>`"* — so a business-unit policy can never quietly remove a central control.
+- **what-if before every apply** — a dry-run showing exactly what would change is written to the run log before anything is actually changed. On a pull request it's just for information; on a deploy it's the plan that gets applied.
+- **smoke-test gates promotion** — `scripts/smoke-test.sh` sends three test calls at the stage just deployed: a jailbreak attempt, a call that exceeds the rate cap, and a pair that should hit the cache. If a control has stopped working, the rollout halts before it reaches production.
+- **Drift detection** — telemetry can't tell you someone hand-edited a policy in the portal, but a scheduled dry-run can. When it finds an unauthorized change it fails the job and opens an issue, so the change gets owned and reconciled instead of silently overwritten.
 
 ## One-time setup
 
 ### 1. Federated identity (OIDC, no stored secrets)
 
-Per environment (`dev`, `test`, `prod`) create an Entra app (or user-assigned MI) with a
-**federated credential** trusting this repo's environment, and grant it `Contributor` +
-`Role Based Access Control Administrator` (the template assigns roles) on the target
-subscription:
+This uses passwordless sign-in with short-lived tokens (OIDC) so no password or key is ever stored. For each environment (`dev`, `test`, `prod`), create an Entra identity (an app, or an Azure-issued identity the service owns) with a **federated credential** that trusts this repo's environment. Grant it the `Contributor` and `Role Based Access Control Administrator` roles on the target subscription (the second role lets the template assign roles itself):
 
 ```bash
 az ad app create --display-name "apim-gov-deploy-prod"
@@ -46,12 +43,12 @@ az role assignment create --assignee <appId> --role Contributor --scope /subscri
 az role assignment create --assignee <appId> --role "Role Based Access Control Administrator" --scope /subscriptions/<subId>
 ```
 
-No client secret is created or stored — auth is the short-lived OIDC token. (rules/security.md)
+No client secret is ever created or stored — the only credential is the short-lived sign-in token. (rules/security.md)
 
 ### 2. GitHub Environments
 
-Create environments `dev`, `test`, `prod`. On `test` and `prod` add a **required reviewers**
-protection rule — that is the approval gate. Set these **environment variables** on each:
+Create environments `dev`, `test`, `prod`. On `test` and `prod`, add a **required reviewers**
+protection rule — that is the human approval gate before a deploy proceeds. Set these **environment variables** on each:
 
 | Variable | Value |
 |---|---|
@@ -62,18 +59,18 @@ protection rule — that is the approval gate. Set these **environment variables
 
 ### 3. Branch protection
 
-Require the `validate` checks to pass before merge to `main`. Now: PR → validate → review →
-merge → staged deploy with approvals → nightly drift watch.
+Require the `validate` checks to pass before anything can merge to `main`. The full path is now: open a pull request → automated validation → human review →
+merge → staged deploy with approvals → nightly check for hand-made changes.
 
 ## The `pipelineGuardrails` flag is informational
 
-Unlike `networkIsolation`, this flag does **not** gate a Bicep module — CI/CD lives outside
-the deployment. The flag in `profiles.json` is a **declaration** that an environment is
-expected to be under pipeline governance (on for `test`/`prod`/`regulated`, off for `dev`).
-Use it for audit/compliance assertions ("is this env change-controlled?"), not to switch
-infrastructure. Flipping it does not deploy or remove anything. This is called out so no one
+Unlike `networkIsolation`, this flag does **not** turn any infrastructure on or off — the
+pipeline lives outside the deployment. In `profiles.json` the flag is simply a **statement**
+that an environment is expected to be under pipeline governance (on for `test`/`prod`/`regulated`, off for `dev`).
+Use it for audit and compliance questions ("is this environment change-controlled?"), not to switch
+infrastructure. Setting it deploys and removes nothing. This is spelled out so no one
 expects `pipelineGuardrails: true` to *create* the pipeline — the pipeline is the workflow
-files in `.github/`, present once and applied by branch/environment protection.
+files already sitting in `.github/`, present once and enforced by the branch and environment protection rules.
 
 ## Running the checks locally
 
@@ -88,8 +85,8 @@ $env:GOV_PROFILE='prod'; pwsh scripts/drift-detect.ps1
 
 ## Handling a drift alert
 
-1. Open the `drift` issue / failed run; the log lists the changed resource ids.
-2. Decide: was the portal edit legitimate?
-   - **No** → redeploy the repo to overwrite it: re-run `deploy.yml` for that environment.
-   - **Yes** → reproduce it in `infra/` and open a PR so the repo becomes the source of truth again.
-3. Re-run `drift.yml` to confirm green and auto-close the loop.
+1. Open the `drift` issue or failed run; the log lists which resources were changed.
+2. Decide whether the hand-made edit was legitimate.
+   - **No** → redeploy from the repo to overwrite it: re-run `deploy.yml` for that environment.
+   - **Yes** → recreate the change in `infra/` and open a pull request, so the repo again matches reality and stays the single source of truth.
+3. Re-run `drift.yml` to confirm it passes and closes the loop.

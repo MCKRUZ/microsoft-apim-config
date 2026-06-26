@@ -37,11 +37,13 @@
 <main class="content"><div class="wrap">
 <p>GA control. See <a href="../architecture.html">architecture</a> and <a href="../caveats.html">caveats</a>.</p>
 <h2 id="what-it-controls">What it controls</h2>
-<p>Emits token-usage metrics to Application Insights so spend can be attributed back to a
-team, product, and agent. Without this you have a hard cap (see
-<a href="./token-limits.html">token-limits</a>) but no visibility into <em>who</em> spent <em>what</em>. For an
-agent fleet, attribution is what turns a flat bill into per-team chargeback and lets you
-spot a runaway agent before the quota trips.</p>
+<p>This control answers &quot;who spent what.&quot; It records usage figures — how many tokens (the
+unit models bill by, roughly a word-piece) each request used — into App Insights (Azure's
+app-monitoring service), tagged by team, product, and agent. Without it you would have a
+hard spending cap (see <a href="./token-limits.html">token-limits</a>) but no idea where the money went.</p>
+<p>For a fleet of AI agents, this is what turns one undifferentiated bill into per-team
+chargeback — billing each team for what it actually used — and lets you spot a runaway
+agent before it trips the budget limit.</p>
 <h2 id="the-policy">The policy</h2>
 <p>From <code>infra/policies/llm-governance.xml</code> (inbound):</p>
 <pre><code class="language-xml">&lt;llm-emit-token-metric namespace=&quot;ai-governance&quot;&gt;

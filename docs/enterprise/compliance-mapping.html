@@ -35,9 +35,9 @@
   <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/compliance-mapping.md">edit this page on GitHub ↗</a></p>
 </div></header>
 <main class="content"><div class="wrap">
-<p>How each gateway control supplies evidence for the frameworks an enterprise AI platform answers to. This is not legal advice — it's the control-to-obligation traceability an auditor or risk team expects, so the gateway becomes a <em>control implementation</em>, not just infrastructure.</p>
-<p>Frameworks: <strong>EU AI Act</strong> (high-risk obligations), <strong>NIST AI RMF 1.0</strong> (Govern/Map/Measure/Manage), <strong>ISO/IEC 42001</strong> (AI management system), <strong>ISO/IEC 27001</strong> (infosec), <strong>SOC 2</strong> (Trust Services Criteria).</p>
-<h2 id="control-obligation-matrix">Control → obligation matrix</h2>
+<p>How each control in the gateway produces the evidence demanded by the rulebooks an enterprise AI platform has to answer to. This is not legal advice. It is the trail an auditor or risk team expects — showing, for each obligation, which control satisfies it — so the gateway counts as an actual implementation of those controls, not just plumbing.</p>
+<p>The rulebooks covered here: the <strong>EU AI Act</strong> (Europe's law on high-risk AI), <strong>NIST AI RMF 1.0</strong> (a US government AI risk framework organised as Govern / Map / Measure / Manage), <strong>ISO/IEC 42001</strong> (the international standard for running an AI management system), <strong>ISO/IEC 27001</strong> (the international standard for information security), and <strong>SOC 2</strong> (a US audit standard built on its &quot;Trust Services Criteria&quot;).</p>
+<h2 id="control--obligation-matrix">Control → obligation matrix</h2>
 <table>
 <thead>
 <tr>
@@ -158,16 +158,16 @@
 </table>
 <h2 id="how-to-use-this">How to use this</h2>
 <ol>
-<li><strong>Map obligation → control → evidence.</strong> For an audit, each row's &quot;evidence&quot; is concrete: Log Analytics queries, App Insights metrics, the git history of policy changes, the deployment <code>what-if</code> records, the Sentinel incidents. Policy-as-code in git <em>is</em> the Art. 11 / ISO 7.5 technical documentation.</li>
-<li><strong>Profiles encode obligation tiers.</strong> The <code>regulated</code> profile (see <a href="capability-toggles.html">capability-toggles.md</a>) turns on every control a high-risk EU AI Act system needs; <code>prod</code> is a strong baseline; <code>dev</code> is non-production and labelled as such.</li>
-<li><strong>Gaps are documented, not hidden.</strong> <a href="../caveats.html">caveats.md</a> is itself an Art. 9 / GOVERN-4 artifact: an honest risk register of what the controls do and don't do (streaming content-safety limits, cache staleness, preview surfaces). Auditors trust a documented limitation more than an undocumented assumption.</li>
-<li><strong>The chokepoint centralizes evidence.</strong> Because every model/tool/agent call transits one plane, &quot;produce the log of every action agent X took in Q2&quot; is one query — the difference between an audit you pass and one you can't answer.</li>
+<li><strong>Trace each obligation to a control, and the control to its evidence.</strong> For an audit, the evidence in each row is concrete: log queries, performance metrics, the version-control history of every policy change, the records of what each deployment previewed it would change, and the security incidents the monitoring system raised. Keeping policy as code in version control <em>is</em> the technical documentation the EU AI Act (Art. 11) and ISO (7.5) require.</li>
+<li><strong>The environment profiles map to obligation levels.</strong> The <code>regulated</code> profile (see <a href="capability-toggles.html">capability-toggles.md</a>) turns on every control a high-risk EU AI Act system needs; <code>prod</code> is a strong baseline; <code>dev</code> is non-production and clearly labelled as such.</li>
+<li><strong>Gaps are written down, not hidden.</strong> <a href="../caveats.html">caveats.md</a> is itself a required risk-documentation artifact (EU AI Act Art. 9 / NIST GOVERN-4): an honest register of what the controls do and don't do — content-safety limits on streaming responses, the chance of a stale cached answer, the preview features. Auditors trust a written-down limitation more than an unstated assumption.</li>
+<li><strong>One chokepoint puts all the evidence in one place.</strong> Because every model, tool, and agent call goes through one layer, answering &quot;show me the log of every action agent X took in Q2&quot; is a single query — the difference between an audit you pass and one you simply can't answer.</li>
 </ol>
 <h2 id="what-the-gateway-does-not-cover-state-these-to-risk-teams">What the gateway does NOT cover (state these to risk teams)</h2>
 <ul>
-<li><strong>In-model behavior</strong> — bias, hallucination, training-data provenance — is governed at the model/Foundry layer, not the gateway. The gateway governs the <em>I/O boundary</em>.</li>
-<li><strong>Agent business logic</strong> — whether an agent <em>should</em> take an action it's authorized to take is an app-layer decision; the gateway enforces <em>can it reach the system, at what rate, with what identity, on the record</em>.</li>
-<li><strong>Discovery of ungoverned paths</strong> — the gateway can't govern a call that doesn't transit it. Network isolation (§4) plus periodic egress audits close this; it's a discipline, not an automatic guarantee.</li>
+<li><strong>How the model itself behaves</strong> — bias, made-up answers, where its training data came from — is handled at the model layer, not the gateway. The gateway governs what crosses its boundary in and out, not what happens inside the model.</li>
+<li><strong>An agent's business logic</strong> — whether an agent <em>should</em> take an action it is allowed to take is a decision for the application, not the gateway. The gateway only enforces whether it <em>can</em> reach the system, how often, with which identity, and on the record.</li>
+<li><strong>Finding paths that bypass the gateway</strong> — the gateway can't govern a call that never goes through it. Network isolation (§4) plus periodic checks of what is leaving the network close this gap, but it takes ongoing discipline; it is not automatic.</li>
 </ul>
 
 </div></main>

@@ -8,10 +8,12 @@ Docs: https://learn.microsoft.com/azure/api-management/unified-model-api
 
 ## What it governs
 
-A single client endpoint for **all** model traffic, in OpenAI Chat Completions format.
-Clients code against one contract; APIM translates to whatever backend format each model
-speaks. This decouples agent code from provider choice — the governed surface stays the
-same whether the backend is Azure OpenAI or Anthropic.
+This gives every client one front door for **all** model traffic, using a single request
+format (OpenAI's Chat Completions format). Clients write their code against that one format,
+and the API gateway (Azure API Management, "APIM") translates it into whatever each model
+actually expects. The payoff: agent code no longer has to know or care which provider is
+behind the door — the governed entry point stays the same whether the model is Azure OpenAI
+or Anthropic (the maker of Claude).
 
 ## Endpoint / shape
 
@@ -20,10 +22,11 @@ POST /llm/v1/chat/completions     # OpenAI Chat Completions request shape
 GET  /models                      # discovery endpoint
 ```
 
-- APIM translates the request to the backend format: **OpenAI Chat Completions** or
-  **Anthropic Messages**.
-- **Aliases** decouple client-facing model names from backend deployment names.
-- Supports **failover** across backends.
+- The gateway translates the request into the format the backend speaks: **OpenAI Chat
+  Completions** or **Anthropic Messages**.
+- **Aliases** let clients refer to a model by a friendly name that is separate from the
+  real backend deployment name, so the backend can change without breaking client code.
+- Supports **failover** — if one backend is down, traffic shifts to another.
 
 In this repo it points at **Azure OpenAI only**.
 

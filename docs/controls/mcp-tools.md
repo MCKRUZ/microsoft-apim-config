@@ -7,10 +7,13 @@ See [architecture](../architecture.md) and [caveats](../caveats.md).
 
 ## What it governs
 
-The **agent → tool** traffic surface. APIM exposes an existing REST API *as an MCP
-server*: each API operation becomes an MCP tool. The same gateway invariant holds — an
-agent reaches a tool only through APIM, so rate limits, identity, and tracing apply to
-tool calls just like model calls.
+This covers the traffic where an **agent calls a tool** — that is, an agent reaching out to
+an external function or service to get something done. The API gateway (Azure API
+Management, "APIM") takes an existing web API (a REST API) and presents it as a *tool
+server* (an "MCP server", MCP being the standard agents use to call tools): each operation
+of that API becomes a tool the agent can call. The core rule of the gateway still holds —
+an agent can only reach a tool by going through the gateway — so the same rate limits,
+identity checks, and tracing that apply to model calls also apply to tool calls.
 
 ## Endpoint / shape
 

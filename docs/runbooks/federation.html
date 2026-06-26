@@ -52,101 +52,100 @@ Flags: <code>workspaces</code> (the per-business-unit containers) and <code>entr
 <tr>
 <td>always</td>
 <td><code>modules/governance-global.bicep</code> → service <code>policy</code></td>
-<td>The <strong>All-APIs floor</strong> every scope inherits via <code>&lt;base /&gt;</code>. Correlation header + (when <code>entraAuth</code>) Entra JWT validation.</td>
+<td>The <strong>minimum rules that apply to every API</strong>, which all other scopes inherit through the <code>&lt;base /&gt;</code> tag: a correlation header, plus (when <code>entraAuth</code> is on) checking the Entra sign-in token.</td>
 </tr>
 <tr>
 <td><code>entraAuth</code> on</td>
 <td>named values <code>entra-tenant-id</code>, <code>entra-audience</code></td>
-<td>Tenant + audience the JWT fragment validates against.</td>
+<td>The tenant and audience the sign-in token is checked against.</td>
 </tr>
 <tr>
 <td><code>workspaces</code> on</td>
 <td><code>modules/federation.bicep</code> → N workspaces</td>
-<td>One per BU (default: retail, networkops, finance).</td>
+<td>One workspace per business unit (default: retail, networkops, finance).</td>
 </tr>
 <tr>
 <td><code>workspaces</code> on</td>
 <td>workspace <code>policy</code> (<code>&lt;base /&gt;</code>)</td>
-<td>Each BU inherits the global floor.</td>
+<td>Each business unit inherits the central minimum rules.</td>
 </tr>
 <tr>
 <td><code>workspaces</code> on</td>
 <td>role assignment (Workspace Contributor)</td>
-<td>Scoped RBAC, per BU, when an Entra group is supplied.</td>
+<td>Permissions scoped to one business unit, granted when you supply an Entra group.</td>
 </tr>
 <tr>
 <td><code>workspaces</code> on</td>
 <td>Azure Policy assignment <code>apim-base-inheritance</code></td>
-<td>Built-in <code>d5448c98-…</code> audits/denies any policy that drops <code>&lt;base/&gt;</code>.</td>
+<td>Built-in rule <code>d5448c98-…</code> that audits or blocks any policy that drops <code>&lt;base/&gt;</code>.</td>
 </tr>
 </tbody>
 </table>
-<h2 id="tier-requirement-workspaces-need-a-v2-premium-tier">⚠ Tier requirement — workspaces need a v2 / Premium tier</h2>
-<p>Workspaces are supported on <strong>Basic v2 / Standard v2 / Premium / Premium v2 only</strong> —
-<strong>not</strong> the Developer tier the seed defaults to. Verified against the tier feature
-comparison. <strong>Deploying <code>workspaces: true</code> on Developer will fail.</strong> So any profile
-that turns workspaces on (<code>test</code>/<code>prod</code>/<code>regulated</code>) must also set a v2/Premium SKU:</p>
+<h2 id="tier-requirement--workspaces-need-a-v2--premium-tier">⚠ Tier requirement — workspaces need a v2 / Premium tier</h2>
+<p>Workspaces only work on the <strong>Basic v2 / Standard v2 / Premium / Premium v2</strong> tiers —
+<strong>not</strong> the Developer tier the starting template defaults to. (This is confirmed against the tier feature
+comparison.) <strong>Deploying <code>workspaces: true</code> on Developer will fail.</strong> So any profile
+that turns workspaces on (<code>test</code>/<code>prod</code>/<code>regulated</code>) must also set a v2 or Premium tier:</p>
 <pre><code class="language-bash">azd env set GOV_PROFILE prod
 azd env set APIM_SKU StandardV2     # or PremiumV2 — NOT Developer
 azd up
 </code></pre>
-<p>The <code>governance-global</code> floor (incl. <code>entraAuth</code>) works on <strong>every</strong> tier; only the
-workspaces half carries the tier requirement.</p>
+<p>The central <code>governance-global</code> minimum rules (including <code>entraAuth</code>) work on <strong>every</strong> tier; only the
+workspaces half carries this tier requirement.</p>
 <h2 id="the-federation-contract-why-ltbasegt-matters">The federation contract (why <code>&lt;base/&gt;</code> matters)</h2>
 <pre><code>Global (All APIs) policy   ── platform team owns ──►  &lt;base/&gt; + correlation + [Entra JWT]
         ▲ inherited by
 Workspace policy (per BU)   ── BU team owns ───────►  &lt;base/&gt;  + (BU may ADD narrower rules)
 </code></pre>
-<p>A workspace team can <strong>add</strong> policies but cannot <strong>remove</strong> the central ones, because
-<code>&lt;base/&gt;</code> pulls the parent scope in. The built-in Azure Policy enforces this from the
-outside: drop <code>&lt;base/&gt;</code> and the policy is <strong>audited</strong> (or <strong>denied</strong>, if you set
-<code>basePolicyEffect=Deny</code>). Two independent mechanisms guarding the same invariant — the
-<code>&lt;base/&gt;</code>-presence lint in CI (Phase 2) at author time, and Azure Policy at deploy/runtime.</p>
+<p>A workspace team can <strong>add</strong> policies but cannot <strong>remove</strong> the central ones, because the
+<code>&lt;base/&gt;</code> tag pulls the parent's rules in. The built-in Azure rule enforces this from the
+outside: if someone drops <code>&lt;base/&gt;</code>, the policy is flagged for audit (or <strong>blocked outright</strong>, if you set
+<code>basePolicyEffect=Deny</code>). Two independent mechanisms guard the same rule — the
+check for <code>&lt;base/&gt;</code> in the pipeline (Phase 2) when a policy is written, and the Azure rule at deploy and run time.</p>
 <h2 id="wiring-bu-rbac">Wiring BU RBAC</h2>
-<p>By default workspaces are created <strong>without</strong> RBAC assignments (the demo BUs have no real
-Entra groups). To grant a BU team scoped access, put the BU's Entra <strong>group object id</strong> in
-the workspace def and redeploy:</p>
+<p>By default, workspaces are created <strong>without</strong> any permission assignments (the demo business units have no real
+Entra groups). To give a business-unit team access scoped to just their workspace, put the unit's Entra <strong>group object id</strong> in
+the workspace definition and redeploy:</p>
 <pre><code class="language-bash">az deployment sub create -l eastus2 -f infra/main.bicep \
   -p infra/main.parameters.json -p profile=prod -p apimSkuName=StandardV2 \
   -p workspaceDefs='[{&quot;name&quot;:&quot;retail&quot;,&quot;displayName&quot;:&quot;Retail&quot;,&quot;description&quot;:&quot;Retail BU&quot;,&quot;adminGroupId&quot;:&quot;&lt;group-object-id&gt;&quot;}]'
 </code></pre>
-<p>This module assigns <strong>API Management Workspace Contributor</strong> (<code>0c34c906-…</code>) at the
-workspace scope. Per Microsoft's model a collaborator <strong>also needs a service-scoped
-workspace role</strong> (<code>API Management Service Workspace API Developer</code> / <code>…Product Manager</code>)
-assigned at the service scope — assign that separately (it grants the cross-cutting read
-access workspace roles don't). Custom least-privilege roles are the production path.</p>
+<p>This module grants the <strong>API Management Workspace Contributor</strong> role (<code>0c34c906-…</code>) scoped to the
+workspace. In Microsoft's model, a collaborator <strong>also needs a second role at the service level</strong>
+(<code>API Management Service Workspace API Developer</code> or <code>…Product Manager</code>) —
+assign that separately, since it provides the cross-cutting read access the workspace-scoped role doesn't. For production, build custom roles that grant only the minimum needed.</p>
 <h2 id="entra-jwt-the-entraauth-flag">Entra JWT (the <code>entraAuth</code> flag)</h2>
-<p>When on, the global policy requires a valid Entra ID token (<code>Authorization: Bearer …</code>)
-for the configured audience on <strong>every</strong> API. Configure tenant + audience:</p>
+<p>When this is on, the central policy requires a valid Entra ID sign-in token (<code>Authorization: Bearer …</code>)
+for the configured audience on <strong>every</strong> API. Set the tenant and audience:</p>
 <pre><code class="language-bash">az deployment sub create ... -p profile=test \
   -p entraTenantId=&lt;tenant-guid&gt; -p entraAudience='api://apim-ai-gateway'
 </code></pre>
-<p><code>entraTenantId</code> defaults to the <strong>deploying tenant</strong>; <code>entraAudience</code> defaults to
+<p><code>entraTenantId</code> defaults to the <strong>tenant you deploy from</strong>; <code>entraAudience</code> defaults to
 <code>api://apim-ai-gateway</code> — set it to your app registration's Application ID URI.</p>
 <blockquote>
-<p><strong>Smoke test note:</strong> <code>scripts/smoke-test.*</code> calls with a subscription key only. With
-<code>entraAuth</code> on it will get <strong>401</strong> until you also send a bearer token — that's the
-intended posture (subscription key = team attribution; JWT = security identity). Run
-the smoke test against a <code>dev</code>-profile deploy, or extend it to fetch a token.</p>
+<p><strong>Smoke test note:</strong> <code>scripts/smoke-test.*</code> sends only a subscription key. With
+<code>entraAuth</code> on it will get a <strong>401</strong> (unauthorized) until you also send a bearer token — and that's the
+intended behavior (the subscription key says which team is calling; the sign-in token proves who they are). Run
+the smoke test against a <code>dev</code>-profile deploy, or extend it to fetch a token first.</p>
 </blockquote>
 <h2 id="verify-after-deploy">Verify after deploy</h2>
 <ul>
 <li>Portal → APIM → <strong>Workspaces</strong> → the BU workspaces are listed.</li>
 <li>Portal → APIM → workspace → <strong>Policies</strong> → the <code>&lt;base/&gt;</code> policy is present.</li>
 <li>Portal → <strong>Policy</strong> → Assignments → <code>apim-base-inheritance</code> present (Audit/Deny).</li>
-<li>With <code>entraAuth</code> on: a key-only call returns <strong>401</strong>; a call with a valid token for the
+<li>With <code>entraAuth</code> on: a call with only a key returns <strong>401</strong>; a call with a valid token for the
 audience returns <strong>200</strong>.</li>
-<li>Calculate effective policy on a workspace API → confirm the global floor is inherited.</li>
+<li>Use the portal's &quot;calculate effective policy&quot; on a workspace API to confirm it inherits the central rules.</li>
 </ul>
 <h2 id="honest-constraints">Honest constraints</h2>
 <ul>
-<li><strong>Workspace gateways</strong> (runtime isolation per BU) and <strong>workspace-level diagnostic
-settings</strong> (federated logging) are additional resources not deployed here — this phase
-establishes the workspace + RBAC + inheritance model on the default managed gateway.
-Add workspace gateways when a mission-critical BU needs runtime isolation.</li>
-<li>Workspace <strong>gateway provisioning can take hours</strong>; plan BU onboarding accordingly.</li>
-<li>MCP/A2A preview surfaces are <strong>not yet supported inside workspaces</strong> — keep those at
-the service scope for now.</li>
+<li><strong>Per-business-unit runtime isolation</strong> (a dedicated &quot;workspace gateway&quot;) and <strong>per-workspace
+logging settings</strong> are extra resources not deployed here — this phase
+sets up the workspace, scoped permissions, and inheritance model on the shared managed gateway.
+Add a dedicated workspace gateway when a mission-critical business unit needs its own isolated runtime.</li>
+<li>Provisioning a dedicated <strong>workspace gateway can take hours</strong>; plan business-unit onboarding accordingly.</li>
+<li>The preview features — the standard agents use to reach tools (MCP) and agent-to-agent (A2A) — are <strong>not yet supported inside workspaces</strong>, so keep those at
+the service level for now.</li>
 </ul>
 
 </div></main>

@@ -41,11 +41,14 @@ portal/CLI guidance in <code>scripts/provision-preview.*</code>, not declarative
 </blockquote>
 <p>See <a href="../architecture.html">architecture</a> and <a href="../caveats.html">caveats</a>.</p>
 <h2 id="what-it-governs">What it governs</h2>
-<p>The <strong>agent → tool</strong> traffic surface. APIM exposes an existing REST API <em>as an MCP
-server</em>: each API operation becomes an MCP tool. The same gateway invariant holds — an
-agent reaches a tool only through APIM, so rate limits, identity, and tracing apply to
-tool calls just like model calls.</p>
-<h2 id="endpoint-shape">Endpoint / shape</h2>
+<p>This covers the traffic where an <strong>agent calls a tool</strong> — that is, an agent reaching out to
+an external function or service to get something done. The API gateway (Azure API
+Management, &quot;APIM&quot;) takes an existing web API (a REST API) and presents it as a <em>tool
+server</em> (an &quot;MCP server&quot;, MCP being the standard agents use to call tools): each operation
+of that API becomes a tool the agent can call. The core rule of the gateway still holds —
+an agent can only reach a tool by going through the gateway — so the same rate limits,
+identity checks, and tracing that apply to model calls also apply to tool calls.</p>
+<h2 id="endpoint--shape">Endpoint / shape</h2>
 <pre><code>https://&lt;apim&gt;.azure-api.net/&lt;api&gt;-mcp/mcp
 </code></pre>
 <p>Transport: <strong>streamable HTTP</strong> at <code>/mcp</code>.</p>
@@ -68,7 +71,7 @@ optional <code>validate-jwt</code>.</p>
     &lt;!-- optional: &lt;validate-jwt .../&gt; --&gt;
 &lt;/inbound&gt;
 </code></pre>
-<h2 id="limitations-caveats">Limitations / caveats</h2>
+<h2 id="limitations--caveats">Limitations / caveats</h2>
 <ul>
 <li><strong>Governance scope is WHOLE-SERVER, not per-tool.</strong> One policy covers every tool on the
 server; you cannot rate-limit or gate a single operation independently.</li>

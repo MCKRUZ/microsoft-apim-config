@@ -4,11 +4,14 @@ GA control. See [architecture](../architecture.md) and [caveats](../caveats.md).
 
 ## What it controls
 
-Emits token-usage metrics to Application Insights so spend can be attributed back to a
-team, product, and agent. Without this you have a hard cap (see
-[token-limits](./token-limits.md)) but no visibility into *who* spent *what*. For an
-agent fleet, attribution is what turns a flat bill into per-team chargeback and lets you
-spot a runaway agent before the quota trips.
+This control answers "who spent what." It records usage figures — how many tokens (the
+unit models bill by, roughly a word-piece) each request used — into App Insights (Azure's
+app-monitoring service), tagged by team, product, and agent. Without it you would have a
+hard spending cap (see [token-limits](./token-limits.md)) but no idea where the money went.
+
+For a fleet of AI agents, this is what turns one undifferentiated bill into per-team
+chargeback — billing each team for what it actually used — and lets you spot a runaway
+agent before it trips the budget limit.
 
 ## The policy
 

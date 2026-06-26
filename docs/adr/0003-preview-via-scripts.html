@@ -37,17 +37,17 @@
 <main class="content"><div class="wrap">
 <p><strong>Status:</strong> Accepted · <strong>Date:</strong> 2026-06-25</p>
 <h2 id="context">Context</h2>
-<p>The user chose a full showcase including the preview surfaces (MCP server, A2A agent API, unified model API). The GA core is clean Bicep. But the preview constructs are new in 2025–2026 and their management APIs are still moving.</p>
+<p>The showcase includes features that are not yet final (&quot;preview&quot;): the tool server (MCP), the agent-to-agent (A2A) API, and the one-endpoint model API that can front multiple model vendors. The production-ready (&quot;GA&quot;, generally available) core is defined cleanly in Azure's deployment templates (Bicep/ARM). But these preview features are brand new (2025–2026) and the way you set them up is still changing.</p>
 <h2 id="decision">Decision</h2>
-<p>Implement the <strong>GA core as pure Bicep</strong> (<code>infra/</code>). Provision the <strong>preview surfaces via post-deploy scripts</strong> (<code>scripts/provision-preview.*</code>) that attempt <code>az rest</code>/CLI where stable and otherwise print authoritative portal steps + doc links. Wire the script into <code>azd</code> as a <code>postprovision</code> hook.</p>
+<p>Build the <strong>GA core entirely as Bicep templates</strong> (<code>infra/</code>). Set up the <strong>preview features through scripts that run after deployment</strong> (<code>scripts/provision-preview.*</code>). Those scripts use Azure's command-line tools where they're stable, and otherwise print the exact portal click-path plus links to the official docs. The script is wired to run automatically right after deploy (via <code>azd</code>'s <code>postprovision</code> hook).</p>
 <h2 id="rationale">Rationale</h2>
 <ul>
-<li>Verified: MCP server, A2A agent API, and unified model API are documented as <strong>portal/CLI/REST</strong> experiences with immature or absent stable ARM/Bicep resource types. Faking them as Bicep would be dishonest and would break on the next API revision.</li>
-<li>A guided script that points at the exact portal flow and the governance policy file to paste is more durable than brittle calls to shifting preview endpoints.</li>
-<li>Keeps a clean line: if it's in <code>infra/</code> it's GA and reproducible; if it's in <code>scripts/provision-preview.*</code> it's preview and may need updating.</li>
+<li>Confirmed: the tool server (MCP), the A2A agent API, and the one-endpoint model API are documented only as portal/command-line/REST steps, with the matching Bicep/ARM building blocks either missing or not yet stable. Pretending they were Bicep would be dishonest and would break the next time the API changes.</li>
+<li>A guided script that points to the exact portal steps and the governance rules file to paste in is more durable than fragile automated calls against features that are still shifting.</li>
+<li>It keeps a clean dividing line: anything in <code>infra/</code> is production-ready and repeatable; anything in <code>scripts/provision-preview.*</code> is preview and may need updating.</li>
 </ul>
 <h2 id="also-covered-here">Also covered here</h2>
-<p>The content-safety <strong>backend managed-identity auth</strong> is a GA control that hits the same wall — it's not in the ARM backend schema (verified through <code>2025-09-01-preview</code>). It's handled by <code>scripts/configure-backend-auth.*</code> (chained from <code>provision-preview</code>), with a one-toggle portal fallback. See <a href="../caveats.html">caveats.md</a> §3.</p>
+<p>The content-safety service signs in using <strong>an Azure-issued identity the service owns (a managed identity, so no stored password)</strong>. This is a production-ready control, but it hits the same wall — the Bicep/ARM templates don't yet support setting it (confirmed through API version <code>2025-09-01-preview</code>). So it's handled by <code>scripts/configure-backend-auth.*</code> (run as part of <code>provision-preview</code>), with a single portal toggle as a fallback. See <a href="../caveats.html">caveats.md</a> §3.</p>
 <h2 id="consequences">Consequences</h2>
 <ul>
 <li><code>azd up</code> provisions GA infra, then the postprovision hook configures content-safety MI and prints preview-provisioning guidance.</li>

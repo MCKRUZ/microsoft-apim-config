@@ -40,10 +40,10 @@
 <h2 id="two-planes">Two planes</h2>
 <p>Microsoft's reference design draws a hard line between two layers, and this golden copy enforces it:</p>
 <ul>
-<li><strong>Rules / control plane — APIM.</strong> Spend caps, identity, content-safety screening, and the audit record. It does not care whether the underlying call is a model call, a tool call, or an agent-to-agent hand-off — the same rules, access controls, and logs cover all three.</li>
-<li><strong>Work plane — agents and backends.</strong> Where agents run, use tools, and call models.</li>
+<li><strong>The rules layer — the API gateway.</strong> This is where spend caps, identity checks, content-safety screening, and the audit record live. It doesn't matter whether the call underneath is to a model, to a tool, or one agent handing off to another — the same rules, access controls, and logs apply to all three.</li>
+<li><strong>The work layer — the agents and the systems behind them.</strong> This is where agents actually run, use tools, and call models.</li>
 </ul>
-<p><strong>The one invariant:</strong> every outbound call goes through the gateway. Agents are never allowed to reach a model or a tool directly. That single rule is what makes the architecture hold up over time — add a new agent platform, model vendor, or tool, and it is governed the day it arrives, because the gateway already sees all the traffic.</p>
+<p><strong>The one rule that never bends:</strong> every outbound call goes through the gateway. Agents are never allowed to reach a model or a tool directly. That single rule is what keeps the design sound over time — add a new agent platform, model vendor, or tool, and it is governed the day it arrives, because the gateway already sees all the traffic.</p>
 <h2 id="the-three-surfaces">The three surfaces</h2>
 <div class="mermaid">flowchart LR
     subgraph WP["Work plane (agents)"]
@@ -120,7 +120,7 @@
 </tbody>
 </table>
 <h2 id="keyless-by-design">Keyless by design</h2>
-<p>APIM authenticates to every backend with its <strong>system-assigned managed identity</strong> — no API keys live in policies, named values, or config. <code>infra/modules/rbac.bicep</code> grants the identity <code>Cognitive Services OpenAI User</code> (Azure OpenAI) and <code>Cognitive Services User</code> (Content Safety); <code>disableLocalAuth=true</code> on both cognitive accounts forbids key auth entirely.</p>
+<p>The gateway proves who it is to every backend using an Azure-issued identity it owns — a &quot;managed identity&quot;, which means no stored password. There are no API keys anywhere in the policies, settings, or config. <code>infra/modules/rbac.bicep</code> grants that identity the <code>Cognitive Services OpenAI User</code> role (for Azure OpenAI) and <code>Cognitive Services User</code> role (for Content Safety), and <code>disableLocalAuth=true</code> on both AI accounts blocks key-based access entirely.</p>
 <h2 id="where-each-control-lives">Where each control lives</h2>
 <table>
 <thead>

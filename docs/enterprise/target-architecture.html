@@ -40,12 +40,12 @@
 <hr />
 <h2 id="1-principles">1. Principles</h2>
 <ol>
-<li><strong>The chokepoint is the only enforcement point.</strong> Every model/tool/agent call transits APIM. At enterprise scale this is enforced by <em>network</em>, not honour system: backends have no public path (§4).</li>
-<li><strong>Central governance, federated autonomy.</strong> A platform team owns the gateway, the all-APIs policies, and the audit plane. Business-unit teams own their APIs/agents inside <strong>workspaces</strong> with scoped RBAC. (§5)</li>
-<li><strong>Everything is a toggle.</strong> Each capability is a feature flag with a per-environment/per-BU default. A &quot;regulated&quot; profile turns everything on; a &quot;dev&quot; profile is permissive. (§8)</li>
-<li><strong>Defense in depth.</strong> Network isolation, identity, content safety, and audit are independent layers; any one failing open is caught by another and alarmed.</li>
-<li><strong>Policy-as-code, change-controlled.</strong> No portal edits in production. Policy changes flow through a reviewed pipeline with <code>what-if</code> and drift detection. (§7)</li>
-<li><strong>Honest maturity.</strong> GA controls are load-bearing; preview surfaces (MCP/A2A/unified) are isolated so a preview change can't take down production governance.</li>
+<li><strong>One chokepoint, and it is the only place rules are enforced.</strong> Every call to a model, tool, or agent passes through the API gateway (Azure API Management, &quot;APIM&quot; — the single front door all traffic flows through). At enterprise scale we don't rely on good behaviour to keep it that way; the network enforces it, because the systems behind the gateway have no public address at all (§4).</li>
+<li><strong>Central control, local freedom.</strong> A platform team owns the gateway, the policies that apply to every API, and the audit records. Each business unit owns its own APIs and agents inside its own walled-off area (a &quot;workspace&quot;), with permissions scoped to just that area — role-based access control, &quot;RBAC&quot;. (§5)</li>
+<li><strong>Everything is a switch you can flip.</strong> Each capability is a feature flag with a sensible default per environment and per business unit. A &quot;regulated&quot; setting turns everything on; a &quot;dev&quot; setting is relaxed. (§8)</li>
+<li><strong>Layered defence.</strong> Network isolation, identity, content safety, and audit are separate, independent layers. If any one of them fails and lets something through, another catches it and raises an alarm.</li>
+<li><strong>Policy is code, and every change is reviewed.</strong> No hand-edits in the production portal. Policy changes go through a reviewed pipeline that previews the effect before applying it and watches for anyone changing things out of band (drift detection). (§7)</li>
+<li><strong>Be honest about what is finished.</strong> The production-ready (&quot;generally available&quot;, GA) controls do the real work. The not-yet-final (&quot;preview&quot;) features — tool governance, agent-to-agent governance, the unified doorway — are kept isolated so that a change to a preview feature can never take down the governance that production depends on.</li>
 </ol>
 <hr />
 <h2 id="2-reference-topology">2. Reference topology</h2>
@@ -149,40 +149,40 @@
 <h2 id="4-network-isolation-enablenetworkisolation">4. Network isolation (<code>enableNetworkIsolation</code>)</h2>
 <p>The toggle that makes Principle 1 <em>true</em> rather than aspirational.</p>
 <ul>
-<li><strong>Put the gateway inside a private network</strong> (VNet injection, Premium / Premium v2) so it has no public address and all its traffic stays private. This can only be set when the gateway is first created — bake it into the first deploy.</li>
-<li><strong>Private Link + public access OFF</strong> on Azure OpenAI, Content Safety, Azure Managed Redis. With public access disabled, the OpenAI endpoint is useless without the private path — the bypass risk in the seed is closed.</li>
-<li><strong>Front Door Premium + WAF</strong> at the edge for external consumers; private endpoint to the gateway (supported for v2 when fronted by Front Door Premium).</li>
-<li><strong>NSGs</strong> on every subnet (allow Storage + Key Vault dependencies, deny internet egress by default).</li>
-<li>Optional <strong>Network Security Perimeter</strong> around the PaaS resources for a trusted boundary.</li>
-<li>Azure Policy <code>API Management services should use a virtual network</code> enforced in audit→deny.</li>
+<li><strong>Put the gateway inside a private network</strong> (placing the gateway inside a private network — &quot;VNet injection&quot; — on the Premium / Premium v2 tiers) so it has no public address and all its traffic stays private. This can only be set when the gateway is first created, so build it into the very first deployment.</li>
+<li><strong>Use a private-only connection (&quot;Private Link&quot;) and turn public access OFF</strong> on Azure OpenAI, Content Safety, and Azure Managed Redis. Once public access is disabled, the OpenAI endpoint is useless to anyone who isn't on the private path — which closes the bypass risk that exists in the starter version of this repo.</li>
+<li><strong>Front Door Premium + WAF</strong> at the edge for outside users (Front Door is Azure's global entry point; WAF is its web-application firewall). The gateway sits behind a private connection, which v2 supports when Front Door Premium is in front of it.</li>
+<li><strong>Network security groups (NSGs)</strong> on every subnet — firewall rules that allow the Storage and Key Vault connections the gateway needs and block traffic out to the internet by default.</li>
+<li>Optionally, a <strong>Network Security Perimeter</strong> drawn around the platform's managed Azure services to give them one trusted boundary.</li>
+<li>The built-in Azure Policy <code>API Management services should use a virtual network</code> set to first warn, then block (audit→deny).</li>
 </ul>
 <h2 id="5-federation-with-workspaces-enableworkspaces">5. Federation with workspaces (<code>enableWorkspaces</code>)</h2>
-<p>The org-scale governance model — central control, BU autonomy.</p>
+<p>This is how governance works at company scale: the platform stays in central control while each business unit runs its own area. (We call this &quot;federation&quot; — each business unit gets its own walled-off area while the platform keeps central control.)</p>
 <ul>
-<li>One <strong>workspace per business unit / API team</strong>; each holds its own APIs, products, subscriptions, named values. Access via <strong>Entra RBAC scoped to the workspace</strong>.</li>
-<li>The <strong>platform team</strong> applies <strong>all-APIs (global) policies</strong> — the four AI controls — that every workspace inherits; BU teams add only narrower policies. The built-in Azure Policy <code>API Management policies should inherit parent scope using &lt;base/&gt;</code> is enforced so a BU can't strip a central control.</li>
-<li><strong>Workspace gateways</strong> for runtime isolation of mission-critical BUs (a misbehaving Retail agent can't exhaust Finance's gateway); shared default gateway for the long tail.</li>
-<li>Federated observability: each BU sees its own logs; the platform team sees all (compliance oversight).</li>
+<li>One <strong>walled-off area (a &quot;workspace&quot;) per business unit or API team</strong>. Each holds that unit's own APIs, product definitions, subscriptions, and stored settings. Access is granted through identity permissions scoped to just that workspace (Entra is Azure's identity service; RBAC is role-based access control — permissions scoped to one area).</li>
+<li>The <strong>platform team</strong> sets the policies that apply to every API — the four AI controls — and every workspace automatically inherits them. Business units can only add their own <em>narrower</em> rules on top. A built-in Azure Policy, <code>API Management policies should inherit parent scope using &lt;base/&gt;</code>, enforces a required tag (<code>&lt;base/&gt;</code>) that makes every unit's policy include the central one, so a unit can't quietly drop a central control.</li>
+<li><strong>Per-workspace gateways</strong> give the most important business units their own runtime, so a misbehaving Retail agent can't starve Finance's gateway of capacity. Everyone else shares the default gateway.</li>
+<li>Audit visibility is split the same way: each business unit sees only its own logs, while the platform team sees everything, for compliance oversight.</li>
 </ul>
-<h2 id="6-identity-access-identitymode-subscription-entra-both">6. Identity &amp; access (<code>identityMode</code>: <code>subscription</code> | <code>entra</code> | <code>both</code>)</h2>
+<h2 id="6-identity--access-identitymode-subscription--entra--both">6. Identity &amp; access (<code>identityMode</code>: <code>subscription</code> | <code>entra</code> | <code>both</code>)</h2>
 <ul>
 <li><strong>Backend auth:</strong> APIM managed identity only; keys disabled. (Seed already does this.)</li>
 <li><strong>Caller identity:</strong> a subscription key tells us <em>which team</em> is calling (for billing); verifying a signed Entra sign-in token (a &quot;JWT&quot;) proves <em>who</em> is calling, for real security, on the model, tool, and agent surfaces. At enterprise scale, give each agent its own identity so the audit trail attributes an action to <em>an agent</em>, not just a team.</li>
 <li><strong>Tool/A2A authorization:</strong> <code>validate-jwt</code> (templated in <code>mcp-governance.xml</code> / <code>a2a-governance.xml</code>) gating tool and hand-off calls.</li>
 <li><strong>Gateway access control:</strong> least-privilege roles; the people who write policy aren't the people who deploy it; an emergency-access (&quot;break-glass&quot;) account whose elevated rights are granted only just-in-time and time-limited (PIM), with an alert every time it's used.</li>
 </ul>
-<h2 id="7-policy-lifecycle-cicd-enablepipelineguardrails">7. Policy lifecycle &amp; CI/CD (<code>enablePipelineGuardrails</code>)</h2>
+<h2 id="7-policy-lifecycle--cicd-enablepipelineguardrails">7. Policy lifecycle &amp; CI/CD (<code>enablePipelineGuardrails</code>)</h2>
 <ul>
-<li>Policy-as-code in git → PR review → <code>bicep build</code> lint → <code>az deployment ... --what-if</code> → staged apply (dev → staging APIM → prod).</li>
-<li><strong>Drift detection</strong>: scheduled compare of live policy vs repo; portal edits in prod alarm and auto-revert.</li>
-<li><strong>Policy unit tests</strong>: contract tests that fire known payloads (jailbreak, over-cap, oversized) at a staging instance and assert the block — the <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/scripts/smoke-test.sh">smoke-test</a> suite, run in CI against staging.</li>
-<li>Promote via APIM DevOps Resource Kit / azd environments per stage.</li>
+<li>Policies live as code in version control. Each change is peer-reviewed, automatically checked for errors, previewed against the live system to show exactly what it will change (<code>--what-if</code>), then rolled out one environment at a time (dev → staging → production).</li>
+<li><strong>Drift detection</strong> — a scheduled job that compares what is actually running against what the code says it should be. Any hand-edit made in the production portal raises an alarm and is automatically rolled back.</li>
+<li><strong>Policy tests</strong> — automated tests that fire known bad requests (a jailbreak attempt, an over-budget call, an oversized prompt) at a staging copy and confirm each one is blocked. This is the <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/scripts/smoke-test.sh">smoke-test</a> suite, run automatically against staging.</li>
+<li>Releases are promoted stage by stage using Azure's deployment tooling for the gateway.</li>
 </ul>
-<h2 id="8-secrets-config-usekeyvault">8. Secrets &amp; config (<code>useKeyVault</code>)</h2>
+<h2 id="8-secrets--config-usekeyvault">8. Secrets &amp; config (<code>useKeyVault</code>)</h2>
 <ul>
-<li>All config-as-secret (any backend connection strings, third-party keys, JWT signing references) via <strong>Key Vault references</strong> in named values; rotation without redeploy. The seed is already keyless to cognitive services; this covers everything else (e.g., a non-Azure tool's API key behind the gateway).</li>
+<li>Anything sensitive — backend connection strings, third-party keys, sign-in-token signing references — is stored in Key Vault (Azure's secrets store) and referenced by name, never pasted in. Secrets can be rotated without redeploying. This repo already uses no keys at all for the Azure AI services; this covers everything else, such as a non-Azure tool's API key sitting behind the gateway.</li>
 </ul>
-<h2 id="9-observability-action-enablesecopsloop">9. Observability → action (<code>enableSecOpsLoop</code>)</h2>
+<h2 id="9-observability--action-enablesecopsloop">9. Observability → action (<code>enableSecOpsLoop</code>)</h2>
 <p>Telemetry is not governance; the closed loop is.</p>
 <ul>
 <li>Token/prompt/completion logs → Log Analytics; token metrics → App Insights (seed does this).</li>
@@ -190,13 +190,13 @@
 <li><strong>Action</strong>, not just dashboards: a budget breach automatically tightens the usage limit; a spike in blocked attacks raises an alert (and can quarantine the surface); unusual per-agent spend is flagged.</li>
 <li>A query-based reporting dashboard per business unit, plus an executive cost view (FinOps = managing cloud spend) breaking spend down by team, agent, and model.</li>
 </ul>
-<h2 id="10-data-protection-enablepromptlogging-datamasking">10. Data protection (<code>enablePromptLogging</code> + <code>dataMasking</code>)</h2>
-<p>Logging prompts/completions for audit <em>is</em> a data-protection obligation.</p>
+<h2 id="10-data-protection-enablepromptlogging--datamasking">10. Data protection (<code>enablePromptLogging</code> + <code>dataMasking</code>)</h2>
+<p>Once you log the prompts and responses for audit, protecting that log becomes a data-protection duty in its own right.</p>
 <ul>
-<li>Diagnostic <strong>data masking</strong> on prompt/completion logs (PII redaction) before they land.</li>
-<li>Retention + access policy on the Log Analytics workspace; least-privilege on audit data.</li>
-<li>Data-residency: pin logging + (where required) customer data to region; note the single-region customer-data caveat.</li>
-<li>Toggle off prompt-body logging entirely for the most sensitive BUs (keep metrics only).</li>
+<li><strong>Data masking</strong> removes personal information from the prompt and response logs before they are ever stored.</li>
+<li>The log store has set rules for how long data is kept and who can read it, with access kept to the minimum needed.</li>
+<li>Data residency: keep the logs — and, where required, customer data — pinned to a specific region. Note the caveat that customer data can be held in only a single region.</li>
+<li>For the most sensitive business units, turn off logging of the prompt and response text entirely and keep only the usage numbers.</li>
 </ul>
 <hr />
 <h2 id="ai-governance-capability-catalog">AI governance capability catalog</h2>
@@ -276,12 +276,12 @@ var flags = {
 }
 </code></pre>
 <ul>
-<li>Profiles set defaults; individual flags override per deploy. Each flag gates <strong>conditional module deployment</strong> (<code>module x '...' = if (flags.networkIsolation) {...}</code>) and/or <strong>policy fragment inclusion</strong>.</li>
-<li>Per-BU overrides live in the workspace layer, within guardrails the platform team sets (a BU can be <em>stricter</em>, never <em>looser</em> — enforced by the <code>&lt;base/&gt;</code>-inheritance Azure Policy).</li>
-<li>The full flag → capability → tier-requirement → GA/preview matrix is in <a href="capability-toggles.html">capability-toggles.md</a>.</li>
+<li>Each profile sets the defaults; any individual switch can be overridden on a given deployment. A switch either decides whether a piece of infrastructure gets deployed at all (<code>module x '...' = if (flags.networkIsolation) {...}</code>) or whether a piece of policy is included.</li>
+<li>Each business unit can override settings within its own workspace, but only inside the limits the platform team sets: a unit can make a rule <em>stricter</em>, never <em>looser</em>. The required-tag (<code>&lt;base/&gt;</code>) Azure Policy enforces this.</li>
+<li>The full table — switch, what it does, which tier it needs, and whether it is production-ready or preview — is in <a href="capability-toggles.html">capability-toggles.md</a>.</li>
 </ul>
 <hr />
-<h2 id="9-gap-rollout">9. Gap &amp; rollout</h2>
+<h2 id="9-gap--rollout">9. Gap &amp; rollout</h2>
 <p>Seed (today) → enterprise target, in dependency order. Each step is independently shippable.</p>
 <table>
 <thead>
@@ -341,10 +341,10 @@ var flags = {
 <hr />
 <h2 id="honest-constraints-carried-into-the-target">Honest constraints carried into the target</h2>
 <ul>
-<li>The <strong>multi-region vs multi-provider</strong> tier conflict (§3) is a current Azure limit, not a design miss. Revisit when v2 ships multi-region.</li>
-<li>VNet <strong>injection is create-time only</strong> (Premium v2) — get it right on first deploy or rebuild.</li>
-<li>Workspace <strong>gateway provisioning can take hours</strong>; plan BU onboarding accordingly.</li>
-<li>Preview surfaces (MCP per-tool scope, A2A response-side, unified doorway) carry the <a href="../caveats.html">caveats</a>; they're toggled and isolated for that reason.</li>
+<li>You cannot today run live in several regions at once <em>and</em> govern multiple model providers in the same gateway (§3). That is a current Azure limitation, not a design mistake — revisit it when the v2 tier gains multi-region support.</li>
+<li>Placing the gateway inside a private network can only be done when it is first created (on Premium v2). Get it right on the first deployment, or you have to rebuild.</li>
+<li>Standing up a per-workspace gateway can take hours, so plan business-unit onboarding around that.</li>
+<li>The preview features (per-tool governance, the response side of agent-to-agent, the unified doorway) carry the limitations listed in the <a href="../caveats.html">caveats</a>. That is exactly why they are kept switchable and isolated.</li>
 </ul>
 
 </div></main>

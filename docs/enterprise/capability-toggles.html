@@ -35,8 +35,8 @@
   <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/capability-toggles.md">edit this page on GitHub ↗</a></p>
 </div></header>
 <main class="content"><div class="wrap">
-<p>Every governance capability as a feature flag: its parameter, default per profile, tier requirement, maturity, and how it's implemented. Profiles: <strong>D</strong>=dev, <strong>T</strong>=test, <strong>P</strong>=prod, <strong>R</strong>=regulated. <code>●</code>=on, <code>○</code>=off by default (always overridable per deploy).</p>
-<h2 id="platform-hardening-toggles">Platform / hardening toggles</h2>
+<p>Every governance capability is a switch you can flip. For each one this lists its setting name, whether it is on by default in each environment, which service tier it needs, whether it is production-ready or still in preview, and how it is built. The four environments are <strong>D</strong>=dev, <strong>T</strong>=test, <strong>P</strong>=prod, <strong>R</strong>=regulated. <code>●</code> means on by default and <code>○</code> means off by default — either can be overridden on any given deployment.</p>
+<h2 id="platform--hardening-toggles">Platform / hardening toggles</h2>
 <table>
 <thead>
 <tr>
@@ -336,20 +336,21 @@
 </tr>
 </tbody>
 </table>
-<p>* In <code>regulated</code>, semantic cache and prompt-body logging default <strong>off</strong>: cache can surface a close-but-wrong answer, and raw prompt logging is a data-protection liability. Turn on deliberately with masking + tight <code>score-threshold</code>.</p>
+<p>* In the <code>regulated</code> environment, the semantic cache and the logging of prompt text are both off by default. The cache can return a close-but-wrong answer, and storing raw prompts is a data-protection risk. Turn either on only on purpose — with masking and a tight similarity <code>score-threshold</code>.</p>
 <blockquote>
-<p>The seven GA control flags above are <strong>composed into the policy</strong> at deploy time
-(<code>llm-api.bicep</code> splices each element into <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/infra/policies/llm-governance.xml"><code>llm-governance.xml</code></a>
-only when its flag is on). <code>customBlocklists</code> and <code>promptLogging</code> are <em>documented controls</em>
-(external config), and <code>edgeWaf</code>/<code>selfHostedGateway</code> are <em>declared-future</em>. The full per-flag
-wiring audit is in <a href="flag-status.html">flag-status.md</a>.</p>
+<p>The seven production-ready control switches above are <strong>assembled into the policy</strong> at deploy
+time: <code>llm-api.bicep</code> drops each element into <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/infra/policies/llm-governance.xml"><code>llm-governance.xml</code></a>
+only when its switch is on. <code>customBlocklists</code> and <code>promptLogging</code> are <em>documented controls</em>
+(they need configuration set up outside this repo), and <code>edgeWaf</code> / <code>selfHostedGateway</code> are
+<em>declared for the future</em>. The full switch-by-switch audit of how each is wired is in
+<a href="flag-status.html">flag-status.md</a>.</p>
 </blockquote>
-<h2 id="notes-on-dependencies">Notes on dependencies</h2>
+<h2 id="how-the-switches-depend-on-each-other">How the switches depend on each other</h2>
 <ul>
-<li><code>multiRegion</code> and <code>multiProvider</code> are <strong>mutually exclusive in one instance today</strong> (Premium classic vs v2 — see <a href="target-architecture.html#3-tier-decision-the-load-bearing-choice">target-architecture §3</a>). The flag set validates this and fails the build if both are <code>true</code> on one instance.</li>
-<li><code>networkIsolation</code> via injection is <strong>create-time only</strong> on Premium v2 — changing it later requires recreating the instance.</li>
-<li><code>workspaces</code> requires <code>entraAuth</code> for meaningful RBAC scoping.</li>
-<li><code>secOpsLoop</code> budget→throttle writes the <code>tokens-per-minute</code> / <code>token-quota</code> named values, so it depends on <code>tokenRateLimit</code>/<code>tokenQuota</code>.</li>
+<li><code>multiRegion</code> and <code>multiProvider</code> <strong>cannot both be on in one gateway today</strong> — running live in several regions at once needs the Premium classic tier, while governing multiple providers needs v2 (see <a href="target-architecture.html#3-tier-decision-the-load-bearing-choice">target-architecture §3</a>). The build checks for this and fails if both are set to <code>true</code> on one gateway.</li>
+<li><code>networkIsolation</code> (placing the gateway inside a private network) can only be set when the gateway is first created on Premium v2. Changing it later means recreating the gateway.</li>
+<li><code>workspaces</code> needs <code>entraAuth</code> turned on, otherwise there is no signed-in identity to scope permissions against.</li>
+<li>The budget-throttle part of <code>secOpsLoop</code> writes the <code>tokens-per-minute</code> / <code>token-quota</code> settings, so it depends on <code>tokenRateLimit</code> / <code>tokenQuota</code> being on.</li>
 </ul>
 <h2 id="how-a-flag-flows">How a flag flows</h2>
 <pre><code>profile/flag (main.parameters) ─► flags object (config/profiles.bicep)
@@ -357,7 +358,7 @@ wiring audit is in <a href="flag-status.html">flag-status.md</a>.</p>
    ├─► conditional policy:   value: replace(loadTextContent('policies/llm-governance.xml'), '&lt;!--JWT--&gt;', flags.entraAuth ? jwtFragment : '')
    └─► resource property:    publicNetworkAccess: flags.networkIsolation ? 'Disabled' : 'Enabled'
 </code></pre>
-<p>Policy fragments are assembled from toggles so a disabled control leaves <strong>no</strong> dead policy in the pipeline (cleaner than commented blocks).</p>
+<p>The policy is built up from whichever switches are on, so a control that is turned off leaves <strong>no</strong> leftover dead policy behind — cleaner than leaving blocks of disabled code commented out.</p>
 
 </div></main>
 <footer class="foot"><div class="wrap">

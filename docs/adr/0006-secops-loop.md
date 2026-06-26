@@ -4,33 +4,41 @@
 
 ## Context
 Phase 3 of the [target architecture](../enterprise/target-architecture.md) (§9, `secOpsLoop`)
-turns telemetry into action: Sentinel/Defender for threat coverage, budget-breach →
-auto-throttle, injection-spike alerting, and log data protection. The question was how
-much of the "action" is honestly deployable as GA Bicep vs. a documented wiring step.
+turns monitoring data into action — this is the security-operations loop. It adds Microsoft's
+threat-monitoring tools (Sentinel and Defender), automatic slowdown when a budget is blown,
+alerting when there's a spike of prompt-injection attempts (malicious inputs trying to hijack the
+model), and protection of sensitive data in the logs. The real question: how much of the "action"
+half can honestly ship as production-ready Bicep templates, versus a step you wire up by hand and
+document.
 
 ## Decision
-- **Deploy the detection plane as GA Bicep** (`modules/secops.bicep`): a diagnostic
-  setting routing `GatewayLogs` + `GatewayLlmLogs` to Log Analytics, Sentinel onboarding,
-  an action group, and two log alerts (budget threshold, injection 403-spike). Defender
-  for APIs is a subscription-scope plan, enabled in `main.bicep`.
-- **Ground every alert query in a verified table.** Budget = `sum(TotalTokens)` from
-  `ApiManagementGatewayLlmLog`; injection = 403 count from `ApiManagementGatewayLogs`.
-  Both tables/columns verified against the Azure Monitor table reference.
-- **Actuate enforcement with a script, not a deployed workflow.** The budget alert's
-  remediation (lower the `tokens-per-minute` named value) is `scripts/throttle.*`, wired
-  to the action group via an Automation runbook / Logic App. A hand-rolled workflow JSON
-  in Bicep is brittle for a reference repo; the script + documented wiring is more durable.
-- **`dataMasking` does only what it can.** It Hides the `api-key`/`subscription-key`/
-  `Authorization` secret-leak vector on the App Insights diagnostic. It does **not** touch
-  prompt/completion bodies — APIM masking is headers/query only.
+- **Ship the detection side as production-ready Bicep** (`modules/secops.bicep`): send the gateway
+  logs (`GatewayLogs` + `GatewayLlmLogs`) to Log Analytics, onboard Sentinel, set up an alert
+  recipient group, and create two alerts (budget threshold breached, and a spike of rejected
+  requests that signals injection attempts). Defender for APIs is turned on at the subscription
+  level in `main.bicep`.
+- **Base every alert on a real, verified data table.** The budget alert sums token usage
+  (`sum(TotalTokens)`) from `ApiManagementGatewayLlmLog`; the injection alert counts "403"
+  rejections from `ApiManagementGatewayLogs`. Both tables and columns were checked against the
+  official Azure Monitor reference.
+- **Take the action with a script, not a pre-built workflow.** When the budget alert fires, the fix
+  (lowering the per-minute usage cap) is `scripts/throttle.*`, connected to the alert group through
+  an Automation runbook / Logic App. Hand-coding that workflow into Bicep is fragile for a reference
+  repo; the script plus documented wiring is more durable.
+- **`dataMasking` does only what it can.** It hides the `api-key`/`subscription-key`/
+  `Authorization` secrets so they can't leak into the App Insights logs. It does **not** scrub the
+  actual prompt or answer text — masking in the API gateway (Azure API Management, "APIM") only
+  covers headers and query strings.
 
 ## Rationale
-- The alternative (faking auto-throttle as a Logic App, or alerting on an unverified
-  custom-metric name) would be dishonest about what reliably works. Detection is genuinely
-  GA; remediation genuinely needs an actuator. Saying so is the golden-copy contract.
-- Token *counts* (`TotalTokens`) are metadata, safe to collect even in `regulated`. Prompt
-  *bodies* are the PII risk and are governed by `promptLogging`, not masking — keeping the
-  two concerns separate avoids the trap of "we masked it" when nothing masked the body.
+- The alternative (faking the auto-slowdown as a Logic App, or alerting on a metric name we hadn't
+  verified) would misrepresent what actually works. Detection is genuinely production-ready;
+  taking action genuinely needs something to pull the trigger. Saying so plainly is the golden-copy
+  contract.
+- Token *counts* (`TotalTokens`) are just usage numbers — safe to collect even in the strictest
+  `regulated` profile. The prompt and answer *text* is the personal-data (PII) risk, and that's
+  controlled by `promptLogging`, not by masking. Keeping the two separate avoids the trap of
+  claiming "we masked it" when nothing masked the actual text.
 
 ## Consequences
 - Out of the box: Sentinel + Defender + two alerts + email + one-command throttle. Fully

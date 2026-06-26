@@ -3,37 +3,41 @@
 **Status:** Accepted · **Date:** 2026-06-25
 
 ## Context
-Phase 5 (target architecture §9) makes the gateway survive failure: a zone, a region, and a
-flapping/throttling model. APIM offers three distinct mechanisms at three layers, with
-different tier requirements and a hard tier trade-off.
+Phase 5 (target architecture §9) makes the gateway survive failures at three levels: losing one
+data center within a region (a "zone"), losing a whole region, and a model backend that keeps
+failing or rate-limiting. The API gateway (Azure API Management, "APIM") handles each level with a different mechanism, each with its own
+tier requirement — and there's a hard either/or tier trade-off between them.
 
 ## Decision
-- **Treat reliability as three independent flags**, not one: `availabilityZones` (top-level
-  `zones`), `multiRegion` (`additionalLocations`), `modelFailover` (backend circuit breaker +
-  pool). They compose but are enabled separately — `modelFailover` works on any tier including
-  the Developer seed; the gateway-resilience flags need Premium-class.
-- **Zones + regions are properties of the existing service** → edited into `apim.bicep`, not a
-  new module (they're create/update on the same resource, not standalone resources).
-- **`modelFailover` folds into `llm-api.bicep`** — the chat backend + pool are created there
-  and the policy is routed through the pool via the same fragment-injection pattern
-  (`FAILOVER_BACKEND` marker). Keeping the backends with the policy that references them gets
-  the deploy ordering right.
-- **Surface the tier trade-off, don't hide it.** Multi-region is Premium-classic-only; the
-  unified doorway/Claude is v2-only; you cannot have both in one instance today. Documented in
-  the runbook and caveats as the load-bearing tier decision, with a recommendation per priority
-  (resilience-first → Premium classic; provider-first → v2).
+- **Treat reliability as three independent switches**, not one: `availabilityZones` (spread across
+  data centers in a region), `multiRegion` (run in more than one region), and `modelFailover` (an
+  auto-cutoff for a failing model backend plus a pool of backends to fall back on). They work
+  together but are turned on separately — `modelFailover` works on any tier including the Developer
+  default, while the two gateway-level switches need a Premium-class tier.
+- **Zones and regions are settings on the existing gateway** → edited into `apim.bicep` rather than
+  a new module (they update the same resource, not separate ones).
+- **`modelFailover` lives in `llm-api.bicep`** — the chat backend and its fall-back pool are created
+  there, and traffic is routed through the pool using the same snippet-injection pattern
+  (`FAILOVER_BACKEND` placeholder). Keeping the backends next to the rule that references them gets
+  the deployment order right.
+- **Put the tier trade-off in plain sight.** Running in multiple regions requires the Premium
+  classic tier; the unified doorway and Claude require the v2 tier; you cannot have both in one
+  instance today. This is documented in the runbook and caveats as the make-or-break tier decision,
+  with a recommendation per priority (resilience first → Premium classic; provider choice first →
+  v2).
 
 ## Honest constraints
-- **AZ/multi-region need a tier change** — the Developer seed supports neither, so these flags
-  fail on Developer. Added `Premium` to the allowed SKUs; documented as a precondition (Bicep
-  can't fail-fast on a flag/tier mismatch).
+- **Zone spreading and multi-region need a tier change** — the Developer default supports neither,
+  so these switches fail on Developer. Added `Premium` to the allowed tiers; documented as a
+  requirement (Bicep can't reject a switch/tier mismatch at build time).
 - **Token quota counts per region** — `multiRegion` multiplies the effective monthly cap by the
   region count. Cross-referenced to caveats §1; the operator must do the math.
 - **Multi-region + network isolation** needs per-region subnet + public IP in each
   `additionalLocations` entry — not auto-derived; flagged validate-before-prod.
-- **One OpenAI account → one pool member.** The circuit breaker is the real single-region win;
-  true active-active needs a second region's backend added to the pool. The pool is built ready
-  for it rather than faking a second member.
+- **One OpenAI account means one member in the fall-back pool.** The auto-cutoff for a failing
+  backend is the real win within a single region; true run-everywhere-at-once needs a second
+  region's backend added to the pool. The pool is built ready for that rather than faking a second
+  member.
 
 ## Consequences
 - `dev` unchanged (all three flags off). `prod`/`regulated` (with a Premium-class SKU) get zone

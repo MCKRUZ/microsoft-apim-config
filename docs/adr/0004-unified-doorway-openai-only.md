@@ -3,16 +3,16 @@
 **Status:** Accepted · **Date:** 2026-06-25
 
 ## Context
-Two of the chosen options are in mild tension: **model scope = Azure OpenAI only** (every control GA-stable) but **maturity stance = full showcase including the unified "one doorway"**. The doorway exists precisely to abstract *multiple* providers, so a single-provider doorway is, on its face, degenerate.
+Two earlier choices pull against each other. One: stick to **Azure OpenAI only**, because every control is production-ready and stable there. The other: show the full picture, **including the "unified doorway" — one endpoint that fronts multiple model vendors**. The whole reason a unified doorway exists is to hide *several* providers behind one entrance, so building one with a single provider behind it looks, at first glance, pointless.
 
 ## Decision
-Build the **unified model API doorway pattern**, but point it at **Azure OpenAI as the only live backend**. Document adding Claude/Gemini as a backend-pool + tier change, not a rearchitecture.
+Build the **unified doorway pattern**, but wire it to **Azure OpenAI as the only live provider behind it**. Document that adding Anthropic's Claude or Google's Gemini later is just adding a backend and changing tier — not a redesign.
 
 ## Rationale
-- It demonstrates the article's punchline — one client-facing endpoint (`/llm/v1/chat/completions`), one set of governance policies, provider abstraction behind the door — without taking on the instability of running multiple preview-translated providers in the golden copy.
-- Governed traffic stays single-provider and GA-stable (no Anthropic-translation preview in the hot path), satisfying the "OpenAI only" choice.
-- The pattern is the point: the doorway stays put; you point it somewhere new. Adding Claude = add a backend (API format Anthropic Messages) + StandardV2 tier. See [runbooks/add-claude.md](../runbooks/add-claude.md).
+- It shows the main idea — one endpoint for callers (`/llm/v1/chat/completions`), one set of governance rules, and the choice of provider hidden behind it — without the instability of running several not-yet-final, format-translated providers in the reference build.
+- The governed traffic stays single-provider and production-ready (no preview Anthropic translation in the live path), which honors the "OpenAI only" choice.
+- The pattern is the point: the doorway stays where it is and you simply point it somewhere new. Adding Claude means adding a backend (using Anthropic's Messages API format) and moving to the StandardV2 tier. See [runbooks/add-claude.md](../runbooks/add-claude.md).
 
 ## Consequences
-- The unified API is provisioned as a preview surface (per [ADR-0003](0003-preview-via-scripts.md)) alongside the primary `/openai` LLM API, which remains the day-one governed path.
-- If the org later standardises on multi-provider, the doorway is already in place — only backends and tier change.
+- The unified doorway is set up as a not-yet-final ("preview") feature (per [ADR-0003](0003-preview-via-scripts.md)), running alongside the primary `/openai` model API, which stays the governed path from day one.
+- If the org later moves to multiple providers, the doorway is already in place — only the backends and the tier change.

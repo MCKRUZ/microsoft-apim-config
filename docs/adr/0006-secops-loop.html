@@ -38,34 +38,42 @@
 <p><strong>Status:</strong> Accepted · <strong>Date:</strong> 2026-06-25</p>
 <h2 id="context">Context</h2>
 <p>Phase 3 of the <a href="../enterprise/target-architecture.html">target architecture</a> (§9, <code>secOpsLoop</code>)
-turns telemetry into action: Sentinel/Defender for threat coverage, budget-breach →
-auto-throttle, injection-spike alerting, and log data protection. The question was how
-much of the &quot;action&quot; is honestly deployable as GA Bicep vs. a documented wiring step.</p>
+turns monitoring data into action — this is the security-operations loop. It adds Microsoft's
+threat-monitoring tools (Sentinel and Defender), automatic slowdown when a budget is blown,
+alerting when there's a spike of prompt-injection attempts (malicious inputs trying to hijack the
+model), and protection of sensitive data in the logs. The real question: how much of the &quot;action&quot;
+half can honestly ship as production-ready Bicep templates, versus a step you wire up by hand and
+document.</p>
 <h2 id="decision">Decision</h2>
 <ul>
-<li><strong>Deploy the detection plane as GA Bicep</strong> (<code>modules/secops.bicep</code>): a diagnostic
-setting routing <code>GatewayLogs</code> + <code>GatewayLlmLogs</code> to Log Analytics, Sentinel onboarding,
-an action group, and two log alerts (budget threshold, injection 403-spike). Defender
-for APIs is a subscription-scope plan, enabled in <code>main.bicep</code>.</li>
-<li><strong>Ground every alert query in a verified table.</strong> Budget = <code>sum(TotalTokens)</code> from
-<code>ApiManagementGatewayLlmLog</code>; injection = 403 count from <code>ApiManagementGatewayLogs</code>.
-Both tables/columns verified against the Azure Monitor table reference.</li>
-<li><strong>Actuate enforcement with a script, not a deployed workflow.</strong> The budget alert's
-remediation (lower the <code>tokens-per-minute</code> named value) is <code>scripts/throttle.*</code>, wired
-to the action group via an Automation runbook / Logic App. A hand-rolled workflow JSON
-in Bicep is brittle for a reference repo; the script + documented wiring is more durable.</li>
-<li><strong><code>dataMasking</code> does only what it can.</strong> It Hides the <code>api-key</code>/<code>subscription-key</code>/
-<code>Authorization</code> secret-leak vector on the App Insights diagnostic. It does <strong>not</strong> touch
-prompt/completion bodies — APIM masking is headers/query only.</li>
+<li><strong>Ship the detection side as production-ready Bicep</strong> (<code>modules/secops.bicep</code>): send the gateway
+logs (<code>GatewayLogs</code> + <code>GatewayLlmLogs</code>) to Log Analytics, onboard Sentinel, set up an alert
+recipient group, and create two alerts (budget threshold breached, and a spike of rejected
+requests that signals injection attempts). Defender for APIs is turned on at the subscription
+level in <code>main.bicep</code>.</li>
+<li><strong>Base every alert on a real, verified data table.</strong> The budget alert sums token usage
+(<code>sum(TotalTokens)</code>) from <code>ApiManagementGatewayLlmLog</code>; the injection alert counts &quot;403&quot;
+rejections from <code>ApiManagementGatewayLogs</code>. Both tables and columns were checked against the
+official Azure Monitor reference.</li>
+<li><strong>Take the action with a script, not a pre-built workflow.</strong> When the budget alert fires, the fix
+(lowering the per-minute usage cap) is <code>scripts/throttle.*</code>, connected to the alert group through
+an Automation runbook / Logic App. Hand-coding that workflow into Bicep is fragile for a reference
+repo; the script plus documented wiring is more durable.</li>
+<li><strong><code>dataMasking</code> does only what it can.</strong> It hides the <code>api-key</code>/<code>subscription-key</code>/
+<code>Authorization</code> secrets so they can't leak into the App Insights logs. It does <strong>not</strong> scrub the
+actual prompt or answer text — masking in the API gateway (Azure API Management, &quot;APIM&quot;) only
+covers headers and query strings.</li>
 </ul>
 <h2 id="rationale">Rationale</h2>
 <ul>
-<li>The alternative (faking auto-throttle as a Logic App, or alerting on an unverified
-custom-metric name) would be dishonest about what reliably works. Detection is genuinely
-GA; remediation genuinely needs an actuator. Saying so is the golden-copy contract.</li>
-<li>Token <em>counts</em> (<code>TotalTokens</code>) are metadata, safe to collect even in <code>regulated</code>. Prompt
-<em>bodies</em> are the PII risk and are governed by <code>promptLogging</code>, not masking — keeping the
-two concerns separate avoids the trap of &quot;we masked it&quot; when nothing masked the body.</li>
+<li>The alternative (faking the auto-slowdown as a Logic App, or alerting on a metric name we hadn't
+verified) would misrepresent what actually works. Detection is genuinely production-ready;
+taking action genuinely needs something to pull the trigger. Saying so plainly is the golden-copy
+contract.</li>
+<li>Token <em>counts</em> (<code>TotalTokens</code>) are just usage numbers — safe to collect even in the strictest
+<code>regulated</code> profile. The prompt and answer <em>text</em> is the personal-data (PII) risk, and that's
+controlled by <code>promptLogging</code>, not by masking. Keeping the two separate avoids the trap of
+claiming &quot;we masked it&quot; when nothing masked the actual text.</li>
 </ul>
 <h2 id="consequences">Consequences</h2>
 <ul>

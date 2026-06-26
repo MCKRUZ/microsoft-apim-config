@@ -42,19 +42,22 @@ portal/CLI guidance in <code>scripts/provision-preview.*</code>, not declarative
 <p>See <a href="../architecture.html">architecture</a> and <a href="../caveats.html">caveats</a>.
 Docs: https://learn.microsoft.com/azure/api-management/unified-model-api</p>
 <h2 id="what-it-governs">What it governs</h2>
-<p>A single client endpoint for <strong>all</strong> model traffic, in OpenAI Chat Completions format.
-Clients code against one contract; APIM translates to whatever backend format each model
-speaks. This decouples agent code from provider choice — the governed surface stays the
-same whether the backend is Azure OpenAI or Anthropic.</p>
-<h2 id="endpoint-shape">Endpoint / shape</h2>
+<p>This gives every client one front door for <strong>all</strong> model traffic, using a single request
+format (OpenAI's Chat Completions format). Clients write their code against that one format,
+and the API gateway (Azure API Management, &quot;APIM&quot;) translates it into whatever each model
+actually expects. The payoff: agent code no longer has to know or care which provider is
+behind the door — the governed entry point stays the same whether the model is Azure OpenAI
+or Anthropic (the maker of Claude).</p>
+<h2 id="endpoint--shape">Endpoint / shape</h2>
 <pre><code>POST /llm/v1/chat/completions     # OpenAI Chat Completions request shape
 GET  /models                      # discovery endpoint
 </code></pre>
 <ul>
-<li>APIM translates the request to the backend format: <strong>OpenAI Chat Completions</strong> or
-<strong>Anthropic Messages</strong>.</li>
-<li><strong>Aliases</strong> decouple client-facing model names from backend deployment names.</li>
-<li>Supports <strong>failover</strong> across backends.</li>
+<li>The gateway translates the request into the format the backend speaks: <strong>OpenAI Chat
+Completions</strong> or <strong>Anthropic Messages</strong>.</li>
+<li><strong>Aliases</strong> let clients refer to a model by a friendly name that is separate from the
+real backend deployment name, so the backend can change without breaking client code.</li>
+<li>Supports <strong>failover</strong> — if one backend is down, traffic shifts to another.</li>
 </ul>
 <p>In this repo it points at <strong>Azure OpenAI only</strong>.</p>
 <h2 id="how-to-provision">How to provision</h2>
@@ -67,7 +70,7 @@ type yet).</li>
 <p>The same four GA controls apply at this API scope —
 <a href="./token-limits.html">token-limits</a>, <a href="./cost-attribution.html">cost-attribution</a>,
 <a href="./content-safety.html">content-safety</a>, <a href="./semantic-cache.html">semantic-cache</a>.</p>
-<h2 id="limitations-caveats">Limitations / caveats</h2>
+<h2 id="limitations--caveats">Limitations / caveats</h2>
 <ul>
 <li>Adding Claude = add a backend with format <strong>Anthropic Messages</strong>, and it <strong>requires
 StandardV2 tier</strong> — Anthropic token-limit/cache support is <strong>v2-only</strong>. See

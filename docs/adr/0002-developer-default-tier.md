@@ -3,17 +3,17 @@
 **Status:** Accepted · **Date:** 2026-06-25
 
 ## Context
-The APIM SKU drives both cost and capability. A "golden copy" is meant to be cloned and actually run, so the default SKU should let someone stand up the *entire* showcase cheaply, while the docs steer production toward the right tier.
+The pricing tier you pick for the API gateway (Azure API Management, "APIM") controls both how much it costs and what it can do. This project is a "golden copy" — a reference build meant to be copied and actually run by others to learn from. So the out-of-the-box tier should let someone stand up the *entire* showcase cheaply, while the docs point toward the right tier for real production use.
 
 ## Decision
-Default `apimSkuName` = **Developer**. Document **StandardV2** as the canonical production target. Parameterise the SKU so it's a one-line change.
+Default the gateway tier (`apimSkuName`) to **Developer**. Document **StandardV2** as the recommended production tier. Make the tier a single setting so switching is a one-line change.
 
 ## Rationale
-- Verified against docs: the four GA controls **and** the MCP/A2A/unified-model preview surfaces all support the **Developer** tier. For an OpenAI-only deployment, Developer runs the complete showcase.
-- Developer is ~$50/mo vs StandardV2's several-hundred. For a reference/demo that people deploy to learn, that difference matters.
-- The only thing Developer can't do that we'd want is **Anthropic** governance (v2-only) — and we're OpenAI-only by design, so it doesn't bite.
+- Confirmed against the documentation: the four production-ready ("GA", generally available) controls **and** the not-yet-final ("preview") features — tool serving (MCP), agent-to-agent (A2A), and the one-endpoint model API — all run on the **Developer** tier. For an OpenAI-only deployment, Developer runs the complete showcase.
+- Developer costs about $50/month versus several hundred for StandardV2. For a reference build that people deploy just to learn, that gap matters.
+- The only thing Developer can't do that we'd want is governing Anthropic's Claude (which needs the v2 tier) — and we're OpenAI-only by design, so it doesn't bite.
 
 ## Consequences
-- Developer has **no SLA** and ~30–45 min provisioning — fine for a reference, called out in [caveats.md](../caveats.md) so nobody runs production on it.
-- Moving to production = set `APIM_SKU=StandardV2` (and mind the per-region token-cap math on multi-region). No code changes.
-- Consumption is explicitly disallowed (no token-limit governance).
+- Developer carries **no uptime guarantee** (no SLA) and takes about 30–45 minutes to spin up — fine for a reference build, and called out in [caveats.md](../caveats.md) so nobody runs production on it.
+- Moving to production is just setting `APIM_SKU=StandardV2` (and, if running in multiple regions, redoing the per-region usage-cap math). No code changes.
+- The cheapest "Consumption" tier is explicitly disallowed because it can't cap AI usage.

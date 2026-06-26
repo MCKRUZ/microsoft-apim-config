@@ -1,8 +1,8 @@
 # Compliance Mapping
 
-How each gateway control supplies evidence for the frameworks an enterprise AI platform answers to. This is not legal advice — it's the control-to-obligation traceability an auditor or risk team expects, so the gateway becomes a *control implementation*, not just infrastructure.
+How each control in the gateway produces the evidence demanded by the rulebooks an enterprise AI platform has to answer to. This is not legal advice. It is the trail an auditor or risk team expects — showing, for each obligation, which control satisfies it — so the gateway counts as an actual implementation of those controls, not just plumbing.
 
-Frameworks: **EU AI Act** (high-risk obligations), **NIST AI RMF 1.0** (Govern/Map/Measure/Manage), **ISO/IEC 42001** (AI management system), **ISO/IEC 27001** (infosec), **SOC 2** (Trust Services Criteria).
+The rulebooks covered here: the **EU AI Act** (Europe's law on high-risk AI), **NIST AI RMF 1.0** (a US government AI risk framework organised as Govern / Map / Measure / Manage), **ISO/IEC 42001** (the international standard for running an AI management system), **ISO/IEC 27001** (the international standard for information security), and **SOC 2** (a US audit standard built on its "Trust Services Criteria").
 
 ## Control → obligation matrix
 
@@ -23,12 +23,12 @@ Frameworks: **EU AI Act** (high-risk obligations), **NIST AI RMF 1.0** (Govern/M
 | **Maturity register (preview vs GA), caveats** | Art. 9 (documented risk), Art. 11 (technical documentation) | MAP-1.x, GOVERN-4.x | 7.5 documented information | A.5.37 documented procedures | CC2.2 |
 
 ## How to use this
-1. **Map obligation → control → evidence.** For an audit, each row's "evidence" is concrete: Log Analytics queries, App Insights metrics, the git history of policy changes, the deployment `what-if` records, the Sentinel incidents. Policy-as-code in git *is* the Art. 11 / ISO 7.5 technical documentation.
-2. **Profiles encode obligation tiers.** The `regulated` profile (see [capability-toggles.md](capability-toggles.md)) turns on every control a high-risk EU AI Act system needs; `prod` is a strong baseline; `dev` is non-production and labelled as such.
-3. **Gaps are documented, not hidden.** [caveats.md](../caveats.md) is itself an Art. 9 / GOVERN-4 artifact: an honest risk register of what the controls do and don't do (streaming content-safety limits, cache staleness, preview surfaces). Auditors trust a documented limitation more than an undocumented assumption.
-4. **The chokepoint centralizes evidence.** Because every model/tool/agent call transits one plane, "produce the log of every action agent X took in Q2" is one query — the difference between an audit you pass and one you can't answer.
+1. **Trace each obligation to a control, and the control to its evidence.** For an audit, the evidence in each row is concrete: log queries, performance metrics, the version-control history of every policy change, the records of what each deployment previewed it would change, and the security incidents the monitoring system raised. Keeping policy as code in version control *is* the technical documentation the EU AI Act (Art. 11) and ISO (7.5) require.
+2. **The environment profiles map to obligation levels.** The `regulated` profile (see [capability-toggles.md](capability-toggles.md)) turns on every control a high-risk EU AI Act system needs; `prod` is a strong baseline; `dev` is non-production and clearly labelled as such.
+3. **Gaps are written down, not hidden.** [caveats.md](../caveats.md) is itself a required risk-documentation artifact (EU AI Act Art. 9 / NIST GOVERN-4): an honest register of what the controls do and don't do — content-safety limits on streaming responses, the chance of a stale cached answer, the preview features. Auditors trust a written-down limitation more than an unstated assumption.
+4. **One chokepoint puts all the evidence in one place.** Because every model, tool, and agent call goes through one layer, answering "show me the log of every action agent X took in Q2" is a single query — the difference between an audit you pass and one you simply can't answer.
 
 ## What the gateway does NOT cover (state these to risk teams)
-- **In-model behavior** — bias, hallucination, training-data provenance — is governed at the model/Foundry layer, not the gateway. The gateway governs the *I/O boundary*.
-- **Agent business logic** — whether an agent *should* take an action it's authorized to take is an app-layer decision; the gateway enforces *can it reach the system, at what rate, with what identity, on the record*.
-- **Discovery of ungoverned paths** — the gateway can't govern a call that doesn't transit it. Network isolation (§4) plus periodic egress audits close this; it's a discipline, not an automatic guarantee.
+- **How the model itself behaves** — bias, made-up answers, where its training data came from — is handled at the model layer, not the gateway. The gateway governs what crosses its boundary in and out, not what happens inside the model.
+- **An agent's business logic** — whether an agent *should* take an action it is allowed to take is a decision for the application, not the gateway. The gateway only enforces whether it *can* reach the system, how often, with which identity, and on the record.
+- **Finding paths that bypass the gateway** — the gateway can't govern a call that never goes through it. Network isolation (§4) plus periodic checks of what is leaving the network close this gap, but it takes ongoing discipline; it is not automatic.

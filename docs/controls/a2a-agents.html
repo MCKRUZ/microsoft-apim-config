@@ -41,29 +41,34 @@ portal/CLI guidance in <code>scripts/provision-preview.*</code>, not declarative
 </blockquote>
 <p>See <a href="../architecture.html">architecture</a> and <a href="../caveats.html">caveats</a>.</p>
 <h2 id="what-it-governs">What it governs</h2>
-<p>The <strong>agent → agent (A2A)</strong> traffic surface. APIM imports an A2A (Agent2Agent) JSON-RPC
-agent and mediates the JSON-RPC traffic between caller and callee agent. The gateway
-invariant holds: agent-to-agent calls are governed, traced, and identity-bound like every
-other surface.</p>
-<h2 id="endpoint-shape">Endpoint / shape</h2>
-<p>JSON-RPC. On import APIM <strong>re-projects the agent card</strong>:</p>
+<p>This covers traffic where <strong>one agent calls another agent</strong> — &quot;agent-to-agent,&quot; or A2A. The
+API gateway (Azure API Management, &quot;APIM&quot;) registers an A2A agent (A2A stands for
+Agent2Agent) and sits in the middle of the conversation between the calling agent and the
+one being called. Those calls use JSON-RPC, a standard request format. The core rule of the
+gateway still holds: agent-to-agent calls are governed, traced, and tied to a verified
+identity like every other kind of traffic.</p>
+<h2 id="endpoint--shape">Endpoint / shape</h2>
+<p>Calls use JSON-RPC (a standard request format). When an agent is registered, the gateway
+rewrites that agent's published description (its &quot;agent card&quot;) so callers go through the
+gateway instead of straight to the agent. Specifically it:</p>
 <ul>
-<li>rewrites the hostname to the APIM host,</li>
+<li>changes the address to the gateway's address,</li>
 <li>sets the JSON-RPC transport,</li>
-<li>adds a subscription-key requirement.</li>
+<li>requires a subscription key (a per-team access key).</li>
 </ul>
-<p>It emits OpenTelemetry <code>gen_ai.agent.id</code> and <code>gen_ai.agent.name</code> spans for tracing.</p>
+<p>For tracing it emits <code>gen_ai.agent.id</code> and <code>gen_ai.agent.name</code> records in the
+OpenTelemetry format (OTel, a telemetry standard).</p>
 <h2 id="how-to-provision">How to provision</h2>
 <ol>
 <li>Run <code>scripts/provision-preview.{sh,ps1}</code> — handles the A2A import (no stable Bicep type
 yet).</li>
-<li>Or in the portal: import the A2A agent by its JSON-RPC endpoint; APIM generates the
-re-projected agent card.</li>
+<li>Or in the portal: import the A2A agent by its JSON-RPC endpoint; the gateway generates
+the rewritten agent card.</li>
 <li>Attach the governance policy below.</li>
 </ol>
 <h2 id="governance-policy">Governance policy</h2>
 <p><code>infra/policies/a2a-governance.xml</code>.</p>
-<h2 id="limitations-caveats">Limitations / caveats</h2>
+<h2 id="limitations--caveats">Limitations / caveats</h2>
 <ul>
 <li><strong>JSON-RPC only.</strong></li>
 <li><strong>No outgoing response-body deserialization</strong> — policies cannot inspect/transform the
@@ -71,9 +76,9 @@ JSON-RPC response payload.</li>
 <li>Preview: import behavior and card projection may change.</li>
 </ul>
 <h2 id="test">Test</h2>
-<p>Call the re-projected agent card URL on the APIM host with a team subscription key;
-confirm the hostname is rewritten to APIM and that <code>gen_ai.agent.id</code> /
-<code>gen_ai.agent.name</code> appear in the OTel trace.</p>
+<p>Call the rewritten agent-card URL on the gateway host with a team subscription key; confirm
+the address now points to the gateway and that <code>gen_ai.agent.id</code> / <code>gen_ai.agent.name</code>
+appear in the OpenTelemetry (OTel) trace.</p>
 
 </div></main>
 <footer class="foot"><div class="wrap">

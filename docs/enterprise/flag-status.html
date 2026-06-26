@@ -35,15 +35,16 @@
   <p class="edit">Source: <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/docs/enterprise/flag-status.md">edit this page on GitHub ↗</a></p>
 </div></header>
 <main class="content"><div class="wrap">
-<p>Every flag in <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/infra/config/profiles.json"><code>infra/config/profiles.json</code></a>, classified by
-<strong>how it is actually implemented today</strong>. The rule: a flag is either <em>wired</em> (it changes what
-deploys or what policy is composed) or <em>explicitly</em> one of the non-wired categories below — no
-flag silently does nothing while pretending otherwise.</p>
-<p>Legend: <strong>Bicep-gated</strong> = deploys/omits a resource · <strong>Policy-composed</strong> = includes/omits a
-policy element · <strong>Informational</strong> = declares intent, drives a script/CI step, no infra gate by
-design · <strong>Documented control</strong> = real control that needs external configuration, not a pure
-on/off · <strong>Declared (future)</strong> = forward contract, not yet built.</p>
-<h2 id="bicep-gated-flips-a-moduleresource-9">Bicep-gated — flips a module/resource (9)</h2>
+<p>Every switch in <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/infra/config/profiles.json"><code>infra/config/profiles.json</code></a>, sorted by
+<strong>how it actually works today</strong>. The rule we hold ourselves to: a switch either does something real
+(it changes what gets deployed, or what ends up in the policy) or it is <em>explicitly</em> put in one of
+the not-yet-wired categories below. No switch is allowed to quietly do nothing while looking active.</p>
+<p>What the categories mean: <strong>Bicep-gated</strong> = decides whether a piece of infrastructure is deployed
+· <strong>Policy-composed</strong> = decides whether a piece of policy is included · <strong>Informational</strong> = states an
+intent and drives a script or build step, but by design does not gate any infrastructure ·
+<strong>Documented control</strong> = a real control that needs configuration set up outside this repo, not a
+clean on/off · <strong>Declared (future)</strong> = a promise of what is coming, not yet built.</p>
+<h2 id="bicep-gated--flips-a-moduleresource-9">Bicep-gated — flips a module/resource (9)</h2>
 <table>
 <thead>
 <tr>
@@ -100,11 +101,11 @@ on/off · <strong>Declared (future)</strong> = forward contract, not yet built.<
 </tr>
 </tbody>
 </table>
-<h2 id="policy-composed-includesomits-a-governance-element-7">Policy-composed — includes/omits a governance element (7)</h2>
-<p>Composed in <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/infra/modules/llm-api.bicep"><code>llm-api.bicep</code></a> into the markers in
-<a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/infra/policies/llm-governance.xml"><code>llm-governance.xml</code></a>. All default <strong>on</strong>, so the
-composed policy reproduces the always-on seed; turn one <strong>off</strong> and its element is gone (no dead
-policy left behind).</p>
+<h2 id="policy-composed--includesomits-a-governance-element-7">Policy-composed — includes/omits a governance element (7)</h2>
+<p>These are slotted by <a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/infra/modules/llm-api.bicep"><code>llm-api.bicep</code></a> into placeholders in
+<a href="https://github.com/MCKRUZ/microsoft-apim-config/blob/main/infra/policies/llm-governance.xml"><code>llm-governance.xml</code></a>. All are on by default, so the
+assembled policy matches the always-on starter version of this repo. Turn one off and its piece of
+policy simply disappears — nothing dead is left behind.</p>
 <table>
 <thead>
 <tr>
@@ -143,8 +144,8 @@ policy left behind).</p>
 </tr>
 </tbody>
 </table>
-<h2 id="informational-drives-a-script-or-ci-step-no-infra-gate-4">Informational — drives a script or CI step, no infra gate (4)</h2>
-<p>By design these do not gate Bicep; CI/CD and preview surfaces live outside the deployment.</p>
+<h2 id="informational--drives-a-script-or-ci-step-no-infra-gate-4">Informational — drives a script or CI step, no infra gate (4)</h2>
+<p>By design these don't control any infrastructure; the build pipeline and the preview features live outside the deployment.</p>
 <table>
 <thead>
 <tr>
@@ -171,8 +172,8 @@ policy left behind).</p>
 </tr>
 </tbody>
 </table>
-<h2 id="documented-control-real-needs-external-config-2">Documented control — real, needs external config (2)</h2>
-<p>Honest about the gap: these are not a clean Bicep on/off.</p>
+<h2 id="documented-control--real-needs-external-config-2">Documented control — real, needs external config (2)</h2>
+<p>Being honest about the gap: these aren't a clean on/off you can deploy.</p>
 <table>
 <thead>
 <tr>
@@ -191,8 +192,8 @@ policy left behind).</p>
 </tr>
 </tbody>
 </table>
-<h2 id="declared-future-forward-contract-not-built-2">Declared (future) — forward contract, not built (2)</h2>
-<p>Present in the profile so the contract is complete; no implementation yet.</p>
+<h2 id="declared-future--forward-contract-not-built-2">Declared (future) — forward contract, not built (2)</h2>
+<p>Listed in the profile so the full set is on the record, but not built yet.</p>
 <table>
 <thead>
 <tr>
@@ -212,11 +213,13 @@ policy left behind).</p>
 </tbody>
 </table>
 <h2 id="summary">Summary</h2>
-<p>24 flags: <strong>16 wired</strong> (9 Bicep-gated + 7 policy-composed), <strong>4 informational</strong>, <strong>2 documented
-controls</strong>, <strong>2 declared-future</strong>. Nothing is silently inert. The default <code>dev</code> profile turns on
-every GA control (reproducing the original seed); <code>regulated</code> is the strict end (cache + prompt
-bodies off). The two declared-future flags and the two documented controls are the only places
-&quot;toggleable&quot; is aspirational rather than literal — called out here rather than hidden.</p>
+<p>24 switches in total: <strong>16 do something real</strong> (9 control infrastructure + 7 shape the policy),
+<strong>4 informational</strong>, <strong>2 documented controls</strong>, <strong>2 declared for the future</strong>. Nothing sits there
+doing nothing in secret. The default <code>dev</code> profile turns on every production-ready control (matching
+the original starter repo); <code>regulated</code> is the strict end of the scale (cache and prompt-text
+logging both off). The two future switches and the two documented controls are the only places
+where &quot;switchable&quot; is still a goal rather than literally true today — and they are called out here
+rather than hidden.</p>
 
 </div></main>
 <footer class="foot"><div class="wrap">

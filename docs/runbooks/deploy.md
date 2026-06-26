@@ -4,17 +4,17 @@ Provisions the full AI-governance gateway. See [architecture](../architecture.md
 
 ## Prerequisites
 
-- **Azure CLI** (`az`), logged in to the target subscription.
-- **azd** (Azure Developer CLI).
-- An **Azure subscription** with rights to deploy at subscription scope.
-- Quota for **Cognitive Services** (Azure OpenAI + Content Safety) and **APIM** in the
+- **Azure CLI** (`az`), the Azure command-line tool, logged in to the target subscription.
+- **azd** (Azure Developer CLI), the higher-level tool that wraps a full deploy in one command.
+- An **Azure subscription** with rights to deploy across the whole subscription.
+- Enough quota for **Cognitive Services** (Azure OpenAI + Content Safety) and the API gateway (Azure API Management, "APIM") in the
   target region.
 
 ## Resources provisioned
 
-APIM, Azure OpenAI (`gpt-4o` deployment `chat` + `text-embedding-3-small` deployment
+The API gateway (APIM), Azure OpenAI (`gpt-4o` deployment `chat` + `text-embedding-3-small` deployment
 `embeddings`), Azure Managed Redis (RediSearch), Azure AI Content Safety, Log Analytics +
-App Insights, and two demo team products/subscriptions: `team-research`, `team-platform`.
+App Insights for monitoring, and two demo team products/subscriptions: `team-research`, `team-platform`.
 
 ## Deploy with azd (default)
 
@@ -22,11 +22,11 @@ App Insights, and two demo team products/subscriptions: `team-research`, `team-p
 azd up
 ```
 
-- Provisions Bicep at **subscription scope** (creates resource group `rg-<env>`).
-- Default tier is **Developer** (~$50/mo, **no SLA**, ~**30–45 min** to provision).
-  Developer supports the entire OpenAI-only showcase including the preview surfaces.
-- The **postprovision hook runs `scripts/provision-preview.*`** to stand up the preview
-  surfaces (MCP, A2A, unified API) that lack stable Bicep types.
+- Deploys across the whole subscription (creates resource group `rg-<env>`).
+- The default tier is **Developer** (~$50/mo, **no service-level guarantee**, ~**30–45 min** to provision).
+  Developer is enough to run the entire OpenAI-only showcase, including the not-yet-final (preview) features.
+- After provisioning, a **post-deploy hook runs `scripts/provision-preview.*`** to set up the preview
+  features — the standard agents use to reach tools (MCP), agent-to-agent (A2A), and the unified API — which don't yet have stable Bicep definitions.
 
 ## Fallback (no azd)
 
@@ -38,12 +38,11 @@ az deployment sub create \
 ```
 
 After a fallback deploy, run `scripts/provision-preview.*` and
-`scripts/configure-backend-auth.*` manually (azd's postprovision hook is skipped).
+`scripts/configure-backend-auth.*` by hand (the azd post-deploy hook only runs under `azd up`).
 
 ## Backend MI auth (required)
 
-The content-safety backend is created **URL-only** in Bicep — its managed-identity auth
-is not expressible in the ARM/Bicep schema. Apply it post-deploy:
+The content-safety backend is created with **only its URL** in Bicep, because its sign-in method — an Azure-issued identity the service owns, with no stored password — can't be expressed in the Bicep/ARM templates. Set it up after the deploy:
 
 ```bash
 scripts/configure-backend-auth.sh    # or .ps1 on Windows
@@ -73,6 +72,6 @@ Header: api-key: <subscription-key>
 
 ## Soft-delete / purge note
 
-Cognitive Services (OpenAI, Content Safety) and APIM **soft-delete** on deletion.
-Redeploying with the **same names** may require **purging** the soft-deleted resources
-first, or the deploy will fail on name conflict.
+When you delete Cognitive Services (OpenAI, Content Safety) and the API gateway (APIM), Azure doesn't remove them immediately — it keeps them in a recoverable "soft-deleted" state for a while.
+If you redeploy with the **same names**, you may first have to **purge** (permanently remove) those soft-deleted resources,
+or the new deploy will fail because the names are still taken.

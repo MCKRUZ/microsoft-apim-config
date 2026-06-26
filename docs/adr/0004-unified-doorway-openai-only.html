@@ -37,19 +37,19 @@
 <main class="content"><div class="wrap">
 <p><strong>Status:</strong> Accepted · <strong>Date:</strong> 2026-06-25</p>
 <h2 id="context">Context</h2>
-<p>Two of the chosen options are in mild tension: <strong>model scope = Azure OpenAI only</strong> (every control GA-stable) but <strong>maturity stance = full showcase including the unified &quot;one doorway&quot;</strong>. The doorway exists precisely to abstract <em>multiple</em> providers, so a single-provider doorway is, on its face, degenerate.</p>
+<p>Two earlier choices pull against each other. One: stick to <strong>Azure OpenAI only</strong>, because every control is production-ready and stable there. The other: show the full picture, <strong>including the &quot;unified doorway&quot; — one endpoint that fronts multiple model vendors</strong>. The whole reason a unified doorway exists is to hide <em>several</em> providers behind one entrance, so building one with a single provider behind it looks, at first glance, pointless.</p>
 <h2 id="decision">Decision</h2>
-<p>Build the <strong>unified model API doorway pattern</strong>, but point it at <strong>Azure OpenAI as the only live backend</strong>. Document adding Claude/Gemini as a backend-pool + tier change, not a rearchitecture.</p>
+<p>Build the <strong>unified doorway pattern</strong>, but wire it to <strong>Azure OpenAI as the only live provider behind it</strong>. Document that adding Anthropic's Claude or Google's Gemini later is just adding a backend and changing tier — not a redesign.</p>
 <h2 id="rationale">Rationale</h2>
 <ul>
-<li>It demonstrates the article's punchline — one client-facing endpoint (<code>/llm/v1/chat/completions</code>), one set of governance policies, provider abstraction behind the door — without taking on the instability of running multiple preview-translated providers in the golden copy.</li>
-<li>Governed traffic stays single-provider and GA-stable (no Anthropic-translation preview in the hot path), satisfying the &quot;OpenAI only&quot; choice.</li>
-<li>The pattern is the point: the doorway stays put; you point it somewhere new. Adding Claude = add a backend (API format Anthropic Messages) + StandardV2 tier. See <a href="../runbooks/add-claude.html">runbooks/add-claude.md</a>.</li>
+<li>It shows the main idea — one endpoint for callers (<code>/llm/v1/chat/completions</code>), one set of governance rules, and the choice of provider hidden behind it — without the instability of running several not-yet-final, format-translated providers in the reference build.</li>
+<li>The governed traffic stays single-provider and production-ready (no preview Anthropic translation in the live path), which honors the &quot;OpenAI only&quot; choice.</li>
+<li>The pattern is the point: the doorway stays where it is and you simply point it somewhere new. Adding Claude means adding a backend (using Anthropic's Messages API format) and moving to the StandardV2 tier. See <a href="../runbooks/add-claude.html">runbooks/add-claude.md</a>.</li>
 </ul>
 <h2 id="consequences">Consequences</h2>
 <ul>
-<li>The unified API is provisioned as a preview surface (per <a href="0003-preview-via-scripts.html">ADR-0003</a>) alongside the primary <code>/openai</code> LLM API, which remains the day-one governed path.</li>
-<li>If the org later standardises on multi-provider, the doorway is already in place — only backends and tier change.</li>
+<li>The unified doorway is set up as a not-yet-final (&quot;preview&quot;) feature (per <a href="0003-preview-via-scripts.html">ADR-0003</a>), running alongside the primary <code>/openai</code> model API, which stays the governed path from day one.</li>
+<li>If the org later moves to multiple providers, the doorway is already in place — only the backends and the tier change.</li>
 </ul>
 
 </div></main>

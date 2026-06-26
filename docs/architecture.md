@@ -8,10 +8,10 @@ The trust boundary moved. Model-level safety governs the *words* a model produce
 
 Microsoft's reference design draws a hard line between two layers, and this golden copy enforces it:
 
-- **Rules / control plane — APIM.** Spend caps, identity, content-safety screening, and the audit record. It does not care whether the underlying call is a model call, a tool call, or an agent-to-agent hand-off — the same rules, access controls, and logs cover all three.
-- **Work plane — agents and backends.** Where agents run, use tools, and call models.
+- **The rules layer — the API gateway.** This is where spend caps, identity checks, content-safety screening, and the audit record live. It doesn't matter whether the call underneath is to a model, to a tool, or one agent handing off to another — the same rules, access controls, and logs apply to all three.
+- **The work layer — the agents and the systems behind them.** This is where agents actually run, use tools, and call models.
 
-**The one invariant:** every outbound call goes through the gateway. Agents are never allowed to reach a model or a tool directly. That single rule is what makes the architecture hold up over time — add a new agent platform, model vendor, or tool, and it is governed the day it arrives, because the gateway already sees all the traffic.
+**The one rule that never bends:** every outbound call goes through the gateway. Agents are never allowed to reach a model or a tool directly. That single rule is what keeps the design sound over time — add a new agent platform, model vendor, or tool, and it is governed the day it arrives, because the gateway already sees all the traffic.
 
 ## The three surfaces
 
@@ -64,7 +64,7 @@ flowchart LR
 
 ## Keyless by design
 
-APIM authenticates to every backend with its **system-assigned managed identity** — no API keys live in policies, named values, or config. `infra/modules/rbac.bicep` grants the identity `Cognitive Services OpenAI User` (Azure OpenAI) and `Cognitive Services User` (Content Safety); `disableLocalAuth=true` on both cognitive accounts forbids key auth entirely.
+The gateway proves who it is to every backend using an Azure-issued identity it owns — a "managed identity", which means no stored password. There are no API keys anywhere in the policies, settings, or config. `infra/modules/rbac.bicep` grants that identity the `Cognitive Services OpenAI User` role (for Azure OpenAI) and `Cognitive Services User` role (for Content Safety), and `disableLocalAuth=true` on both AI accounts blocks key-based access entirely.
 
 ## Where each control lives
 
